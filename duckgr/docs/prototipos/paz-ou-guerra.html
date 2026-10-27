@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Paz ou Guerra</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@500;700;800&display=swap">
+<style>
+/* Layout: tela única de jogo — barra de jogadores, ferramentas, mapa em grade, registro embaixo. Um só visual (céu de fim de tarde sobre grama). */
+:root{
+  --sky:#1d2a3a; --panel:#26364a; --panel2:#2f4259; --ink:#f4efe3; --muted:#a9b6c6;
+  --grass:#5a9a4a; --grass2:#4f8c41; --peace:#57c785; --war:#e5533d; --gold:#f2c14e;
+  --f-display:"Baloo 2","Trebuchet MS",system-ui,sans-serif;
+  --f-body:"Nunito",system-ui,-apple-system,sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{background:var(--sky);color:var(--ink);font-family:var(--f-body);font-size:15px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px 24px}
+.wrap{max-width:860px;margin:0 auto;display:flex;flex-direction:column;gap:12px}
+h1,h2,h3{font-family:var(--f-display);margin:0;line-height:1.05;text-wrap:balance}
+button{font:inherit;color:inherit;cursor:pointer;border:0}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+
+/* Topo */
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.logo{font-size:30px;font-weight:800;letter-spacing:.5px}
+.logo .p{color:var(--peace)} .logo .g{color:var(--war)}
+.btn{background:var(--panel2);padding:8px 14px;border-radius:10px;font-weight:800}
+.btn:hover{background:#3a5170}
+
+/* Menu */
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:560px){.menu{grid-template-columns:1fr}}
+.world-card{text-align:left;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:10px;
+  border:3px solid transparent;background:var(--panel);transition:transform .15s}
+.world-card:hover{transform:translateY(-2px)}
+.world-card.paz{border-color:var(--peace)} .world-card.guerra{border-color:var(--war)}
+.world-card h2{font-size:34px}
+.world-card.paz h2{color:var(--peace)} .world-card.guerra h2{color:var(--war)}
+.world-card ul{margin:0;padding-left:18px;color:var(--muted);line-height:1.5}
+.world-card .go{align-self:flex-start;margin-top:4px;padding:10px 18px;border-radius:12px;font-weight:800;color:#13202e}
+.world-card.paz .go{background:var(--peace)} .world-card.guerra .go{background:var(--war);color:#fff}
+.intro{color:var(--muted);line-height:1.5;margin:0;max-width:62ch}
+.intro b{color:var(--ink)}
+
+/* Barra do mundo */
+.world-badge{font-family:var(--f-display);font-weight:800;font-size:20px;padding:4px 12px;border-radius:10px}
+.world-badge.paz{background:var(--peace);color:#13202e} .world-badge.guerra{background:var(--war);color:#fff}
+
+.players{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.pl{background:var(--panel);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;text-align:left;
+  border:3px solid transparent;min-width:0}
+.pl.on{border-color:var(--c);background:var(--panel2)}
+.pl .nm{display:flex;align-items:center;gap:6px;font-weight:800}
+.pl .dot{width:14px;height:14px;border-radius:4px;background:var(--c);flex:none}
+.pl .st{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pl .st.bad{color:var(--war)} .pl .st.warn{color:var(--gold)}
+
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:flex;background:var(--panel);border-radius:12px;padding:3px;gap:3px}
+.seg button{padding:7px 12px;border-radius:9px;font-weight:800;color:var(--muted);background:transparent}
+.seg button.on{background:var(--panel2);color:var(--ink)}
+.hint{font-size:12px;color:var(--muted)}
+
+.board{position:relative;border-radius:14px;overflow:hidden;background:var(--grass2);touch-action:none}
+canvas{display:block;width:100%;height:auto}
+
+.wars{display:flex;flex-wrap:wrap;gap:8px}
+.war-pill{display:flex;align-items:center;gap:8px;background:#4a2229;border:2px solid var(--war);border-radius:999px;padding:4px 6px 4px 12px;font-weight:800;font-size:13px}
+.war-pill button{background:var(--peace);color:#13202e;border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800}
+
+.log{background:var(--panel);border-radius:12px;padding:10px 12px;max-height:150px;overflow:auto}
+.log h3{font-size:16px;margin-bottom:6px}
+.log ol{margin:0;padding-left:0;list-style:none;font-size:13px;display:flex;flex-direction:column;gap:3px}
+.log li{color:var(--muted)} .log li b{color:var(--ink)} .log li .t{font-variant-numeric:tabular-nums;opacity:.7;margin-right:6px}
+.log li.bad{color:#ff9d8f} .log li.war{color:#ffb27a}
+
+/* Avisos */
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);
+  background:#111b26;border:2px solid var(--muted);padding:10px 16px;border-radius:12px;font-weight:800;z-index:20;
+  max-width:calc(100% - 32px);text-align:center}
+.alert{position:fixed;inset:0;background:rgba(10,16,24,.72);display:flex;align-items:center;justify-content:center;z-index:30;padding:20px}
+.alert .box{background:var(--panel);border:4px solid var(--war);border-radius:20px;padding:22px;max-width:360px;text-align:center;display:flex;flex-direction:column;gap:10px;animation:pop .25s ease-out}
+.alert .box.gold{border-color:var(--gold)}
+.alert h2{font-size:30px}
+.alert p{margin:0;color:var(--muted);line-height:1.45}
+.alert .btn{align-self:center;background:var(--war);color:#fff}
+.alert .box.gold .btn{background:var(--gold);color:#13202e}
+@keyframes pop{from{transform:scale(.85);opacity:.4}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.foot{font-size:12px;color:var(--muted);line-height:1.5}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="logo"><span class="p">Paz</span> ou <span class="g">Guerra</span></div>
+    <div id="topRight"></div>
+  </div>
+
+  <section id="menuScreen" class="wrap" style="gap:14px">
+    <p class="intro">Rascunho do jogo do <b>Davi</b>. Todo mundo pode colocar qualquer bloco, mas <b>só quem colocou pode quebrar</b>. Escolha o seu lado: quem escolhe Paz vai para o mundo de Paz, e quem escolhe Guerra vai para o mundo de Guerra.</p>
+    <div class="menu">
+      <button class="world-card paz" id="goPaz">
+        <h2>Paz</h2>
+        <ul>
+          <li>Construa com seus amigos.</li>
+          <li>Tentou quebrar o bloco de outro? Aviso: <b>você vai ser denunciado</b>.</li>
+          <li>Fez de novo? Expulso e um dia sem jogar.</li>
+        </ul>
+        <span class="go">Entrar no mundo de Paz</span>
+      </button>
+      <button class="world-card guerra" id="goGuerra">
+        <h2>Guerra</h2>
+        <ul>
+          <li>Construa e defenda sua cidade.</li>
+          <li>Quebrou o bloco de outro? <b>Começa uma guerra</b> na hora.</li>
+          <li>Em guerra, os dois lados podem quebrar os blocos um do outro.</li>
+        </ul>
+        <span class="go">Entrar no mundo de Guerra</span>
+      </button>
+    </div>
+    <p class="foot">Neste rascunho, três jogadores se revezam no mesmo aparelho: toque no nome para trocar de vez. Sem internet, sem contas. O "um dia" de suspensão dura 15 segundos aqui.</p>
+  </section>
+
+  <section id="gameScreen" class="wrap" hidden>
+    <div class="players" id="players"></div>
+    <div class="tools">
+      <div class="seg" id="toolSeg">
+        <button data-tool="place" class="on">Colocar</button>
+        <button data-tool="break">Quebrar</button>
+      </div>
+      <div class="seg" id="matSeg">
+        <button data-mat="madeira" class="on">Madeira</button>
+        <button data-mat="pedra">Pedra</button>
+        <button data-mat="vidro">Vidro</button>
+      </div>
+      <span class="hint">Toque no mapa. Arraste para construir em linha.</span>
+    </div>
+    <div class="board" id="board"><canvas id="cv"></canvas></div>
+    <div class="wars" id="wars"></div>
+    <div class="log"><h3>Registro do mundo</h3><ol id="log"></ol></div>
+    <p class="foot">Cada bloco guarda quem o colocou, e cada ação fica no registro. No jogo de verdade, esse registro vira a prova para denúncias e para a reputação.</p>
+  </section>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="alert" id="alert" hidden><div class="box" id="alertBox"><h2 id="alertTitle"></h2><p id="alertText"></p><button class="btn" id="alertBtn">Entendi</button></div></div>
+
+<script>
+const COLS=22, ROWS=15, SUSPENSAO_MS=15000;
+const PLAYERS=[
+  {id:0,name:"Davi",color:"#f28c28"},
+  {id:1,name:"Rodrigo",color:"#3d8fe0"},
+  {id:2,name:"Visitante",color:"#b36ee8"}
+];
+const $=s=>document.querySelector(s);
+
+function seedWorld(kind){
+  const grid=Array.from({length:ROWS},()=>Array(COLS).fill(null));
+  const house=(x,y,w,h,o,mat)=>{for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+    const edge=i===0||j===0||i===w-1||j===h-1; if(!edge)continue;
+    if(j===h-1&&i===Math.floor(w/2))continue; grid[y+j][x+i]={o,m:(i===Math.floor(w/2)&&j===0)?"vidro":mat};}};
+  house(2,2,5,4,0,"madeira"); house(14,3,6,4,1,"pedra"); house(7,9,5,4,2,"madeira");
+  if(kind==="guerra"){for(let i=0;i<5;i++)grid[8][14+i]={o:1,m:"pedra"};}
+  return {kind,grid,players:PLAYERS.map(p=>({...p,strikes:0,expelledUntil:0})),wars:[],log:[],start:Date.now()};
+}
+const worlds={paz:seedWorld("paz"),guerra:seedWorld("guerra")};
+let W=null, cur=0, tool="place", mat="madeira";
+
+// --- telas
+$("#goPaz").onclick=()=>enter("paz");
+$("#goGuerra").onclick=()=>enter("guerra");
+function enter(k){W=worlds[k];$("#menuScreen").hidden=true;$("#gameScreen").hidden=false;
+  $("#topRight").innerHTML=`<span class="world-badge ${k}">Mundo de ${k==="paz"?"Paz":"Guerra"}</span> <button class="btn" id="back">Menu</button>`;
+  $("#back").onclick=()=>{$("#gameScreen").hidden=true;$("#menuScreen").hidden=false;$("#topRight").innerHTML="";};
+  if(!W.log.length)addLog(`Mundo de ${k==="paz"?"Paz":"Guerra"} aberto. Três casas já construídas.`);
+  resize();renderAll();}
+
+// --- ferramentas
+$("#toolSeg").onclick=e=>{const b=e.target.closest("button");if(!b)return;tool=b.dataset.tool;
+  [...$("#toolSeg").children].forEach(x=>x.classList.toggle("on",x===b));};
+$("#matSeg").onclick=e=>{const b=e.target.closest("button");if(!b)return;mat=b.dataset.mat;
+  [...$("#matSeg").children].forEach(x=>x.classList.toggle("on",x===b));
+  tool="place";[...$("#toolSeg").children].forEach(x=>x.classList.toggle("on",x.dataset.tool==="place"));};
+
+// --- regras
+const P=id=>W.players[id];
+const atWar=(a,b)=>W.wars.some(w=>(w[0]===a&&w[1]===b)||(w[0]===b&&w[1]===a));
+function expelled(p){return p.expelledUntil>Date.now();}
+
+function act(x,y){
+  const me=P(cur);
+  if(expelled(me)){toast(`${me.name} está suspenso. Espere para entrar de novo.`);return;}
+  const cell=W.grid[y][x];
+  if(tool==="place"){
+    if(cell){return;}
+    W.grid[y][x]={o:cur,m:mat};addLog(`<b>${me.name}</b> colocou ${mat} em (${x},${y}).`);draw();return;
+  }
+  if(!cell)return;
+  if(cell.o===cur){W.grid[y][x]=null;addLog(`<b>${me.name}</b> quebrou o próprio bloco em (${x},${y}).`);draw();return;}
+  const other=P(cell.o);
+  if(W.kind==="paz"){
+    me.strikes++;
+    if(me.strikes===1){
+      addLog(`<b>${me.name}</b> tentou quebrar um bloco de ${other.name}. Aviso dado.`,"bad");
+      showAlert("Você vai ser denunciado!",`${me.name}, esse bloco é de ${other.name}. No mundo de Paz, só quem colocou pode quebrar. Se tentar de novo, você será expulso.`,"Entendi");
+    }else{
+      me.expelledUntil=Date.now()+SUSPENSAO_MS;me.strikes=0;
+      let n=0;for(const row of W.grid)for(let i=0;i<COLS;i++)if(row[i]&&row[i].o===cur){row[i]=null;n++;}
+      addLog(`<b>${me.name}</b> tentou de novo e foi expulso. Perdeu ${n} blocos e ficou um dia sem jogar.`,"bad");
+      showAlert("Expulso!",`${me.name} tentou quebrar o bloco dos outros duas vezes. Vai ter que entrar de novo e fazer tudo outra vez, e fica um dia sem jogar (aqui no rascunho, 15 segundos).`,"Ok");
+    }
+    renderAll();return;
+  }
+  // mundo de guerra
+  if(!atWar(cur,cell.o)){
+    W.wars.push([cur,cell.o]);
+    addLog(`<b>${me.name}</b> quebrou um bloco de ${other.name}. Começou a guerra entre ${me.name} e ${other.name}!`,"war");
+    showAlert("Guerra!",`${me.name} quebrou um bloco de ${other.name}. Agora os dois podem quebrar os blocos um do outro, até fazerem as pazes.`,"Ao ataque",true);
+  }else addLog(`<b>${me.name}</b> derrubou um bloco de ${other.name} em (${x},${y}).`,"war");
+  W.grid[y][x]=null;renderAll();
+}
+
+// --- interface
+function renderAll(){renderPlayers();renderWars();renderLog();draw();}
+function renderPlayers(){
+  const el=$("#players");el.innerHTML="";
+  W.players.forEach(p=>{
+    const b=document.createElement("button");b.className="pl"+(p.id===cur?" on":"");b.style.setProperty("--c",p.color);
+    let st="Jogando",cls="";
+    if(expelled(p)){const s=Math.ceil((p.expelledUntil-Date.now())/1000);st=`Suspenso · ${s}s`;cls="bad";}
+    else if(W.kind==="paz"&&p.strikes===1){st="Já foi avisado";cls="warn";}
+    else if(W.kind==="guerra"){const n=W.wars.filter(w=>w.includes(p.id)).length;if(n)st=`Em ${n} guerra${n>1?"s":""}`,cls="bad";}
+    b.innerHTML=`<span class="nm"><span class="dot"></span>${p.name}</span><span class="st ${cls}">${st}</span>`;
+    b.onclick=()=>{cur=p.id;renderPlayers();if(expelled(p))toast(`${p.name} está suspenso.`);};
+    el.appendChild(b);
+  });
+}
+function renderWars(){
+  const el=$("#wars");el.innerHTML="";if(W.kind!=="guerra")return;
+  W.wars.forEach((w,i)=>{const d=document.createElement("div");d.className="war-pill";
+    d.innerHTML=`⚔ ${P(w[0]).name} × ${P(w[1]).name} <button>Fazer as pazes</button>`;
+    d.querySelector("button").onclick=()=>{W.wars.splice(i,1);addLog(`<b>${P(w[0]).name}</b> e <b>${P(w[1]).name}</b> fizeram as pazes.`);renderAll();};
+    el.appendChild(d);});
+}
+function addLog(html,cls=""){const t=Math.floor((Date.now()-W.start)/1000);
+  W.log.unshift({html,cls,t:`${String(Math.floor(t/60)).padStart(2,"0")}:${String(t%60).padStart(2,"0")}`});
+  if(W.log.length>60)W.log.pop();renderLog();}
+function renderLog(){$("#log").innerHTML=W.log.map(l=>`<li class="${l.cls}"><span class="t">${l.t}</span>${l.html}</li>`).join("");}
+
+let toastT;function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastT);toastT=setTimeout(()=>t.hidden=true,2200);}
+function showAlert(title,text,btn,gold){$("#alertTitle").textContent=title;$("#alertText").textContent=text;$("#alertBtn").textContent=btn;
+  $("#alertBox").classList.toggle("gold",!!gold);$("#alertTitle").style.color=gold?"var(--gold)":"var(--war)";$("#alert").hidden=false;$("#alertBtn").focus();}
+$("#alertBtn").onclick=()=>$("#alert").hidden=true;
+
+// --- desenho
+const cv=$("#cv"),ctx=cv.getContext("2d");let cs=24,dpr=1,hover=null;
+function resize(){const w=$("#board").clientWidth||600;cs=Math.floor(w/COLS);dpr=window.devicePixelRatio||1;
+  cv.width=COLS*cs*dpr;cv.height=ROWS*cs*dpr;cv.style.width=COLS*cs+"px";cv.style.height=ROWS*cs+"px";
+  $("#board").style.width=COLS*cs+"px";$("#board").style.maxWidth="100%";$("#board").style.margin="0 auto";
+  ctx.setTransform(dpr,0,0,dpr,0,0);draw();}
+window.addEventListener("resize",()=>{if(W)resize();});
+function noise(x,y){const s=Math.sin(x*12.9898+y*78.233)*43758.5453;return s-Math.floor(s);}
+function shade(hex,k){const n=parseInt(hex.slice(1),16);let r=n>>16,g=n>>8&255,b=n&255;
+  const f=v=>Math.max(0,Math.min(255,Math.round(k<0?v*(1+k):v+(255-v)*k)));return `rgb(${f(r)},${f(g)},${f(b)})`;}
+function draw(){
+  if(!W)return;
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const n=noise(x,y);ctx.fillStyle=n<.5?"#5a9a4a":(n<.85?"#539145":"#62a352");ctx.fillRect(x*cs,y*cs,cs,cs);
+    if(n>.92){ctx.fillStyle="#7dbb5f";ctx.fillRect(x*cs+cs*.3,y*cs+cs*.4,cs*.12,cs*.25);ctx.fillRect(x*cs+cs*.55,y*cs+cs*.3,cs*.12,cs*.35);}
+  }
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const c=W.grid[y][x];if(c)block(x,y,c);}
+  if(hover){const c=W.grid[hover.y]&&W.grid[hover.y][hover.x];
+    ctx.strokeStyle=tool==="break"?"#ffffff":P(cur).color;ctx.lineWidth=2;ctx.setLineDash(tool==="break"?[4,3]:[]);
+    ctx.strokeRect(hover.x*cs+1,hover.y*cs+1,cs-2,cs-2);ctx.setLineDash([]);
+    if(tool==="place"&&!c){ctx.globalAlpha=.35;block(hover.x,hover.y,{o:cur,m:mat});ctx.globalAlpha=1;}}
+}
+function block(x,y,c){
+  const col=P(c.o).color,px=x*cs,py=y*cs,s=cs;
+  if(c.m==="vidro"){ctx.fillStyle=shade(col,.6);ctx.fillRect(px+1,py+1,s-2,s-2);
+    ctx.fillStyle="rgba(255,255,255,.55)";ctx.beginPath();ctx.moveTo(px+s*.2,py+s*.75);ctx.lineTo(px+s*.45,py+s*.2);ctx.lineTo(px+s*.55,py+s*.2);ctx.lineTo(px+s*.3,py+s*.75);ctx.fill();}
+  else{ctx.fillStyle=c.m==="pedra"?shade(col,-.15):col;ctx.fillRect(px+1,py+1,s-2,s-2);
+    if(c.m==="madeira"){ctx.fillStyle="rgba(0,0,0,.18)";for(let k=1;k<3;k++)ctx.fillRect(px+1,py+k*s/3,s-2,1.5);
+      ctx.fillRect(px+s*.5,py+1,1.5,s/3);ctx.fillRect(px+s*.25,py+s/3,1.5,s/3);ctx.fillRect(px+s*.7,py+2*s/3,1.5,s/3-1);}
+    else{for(let k=0;k<5;k++){const a=noise(x*7+k,y*3+k),b=noise(y*5+k,x*11+k);
+      ctx.fillStyle=k%2?"rgba(0,0,0,.2)":"rgba(255,255,255,.18)";ctx.fillRect(px+2+a*(s-7),py+2+b*(s-7),s*.18,s*.14);}}}
+  ctx.strokeStyle=shade(col,-.45);ctx.lineWidth=1.5;ctx.strokeRect(px+1.5,py+1.5,s-3,s-3);
+  if(W.kind==="guerra"&&c.o!==cur&&atWar(cur,c.o)){ctx.strokeStyle="#ff4a33";ctx.lineWidth=2;ctx.strokeRect(px+2.5,py+2.5,s-5,s-5);}
+}
+let down=false,last=null;
+function cellAt(e){const r=cv.getBoundingClientRect();const x=Math.floor((e.clientX-r.left)/r.width*COLS),y=Math.floor((e.clientY-r.top)/r.height*ROWS);
+  return (x<0||y<0||x>=COLS||y>=ROWS)?null:{x,y};}
+cv.addEventListener("pointerdown",e=>{const c=cellAt(e);if(!c)return;down=true;last=c.x+","+c.y;cv.setPointerCapture(e.pointerId);act(c.x,c.y);});
+cv.addEventListener("pointermove",e=>{const c=cellAt(e);hover=e.pointerType==="mouse"?c:null;
+  if(down&&c&&tool==="place"&&last!==c.x+","+c.y){last=c.x+","+c.y;act(c.x,c.y);}else draw();});
+cv.addEventListener("pointerup",()=>{down=false;});
+cv.addEventListener("pointerleave",()=>{hover=null;draw();});
+
+// relógio da suspensão
+setInterval(()=>{if(!W)return;let changed=false;
+  W.players.forEach(p=>{if(p.expelledUntil&&!expelled(p)){p.expelledUntil=0;changed=true;addLog(`<b>${p.name}</b> pode voltar. Entrou de novo, começando do zero.`);}
+    else if(expelled(p))changed=true;});
+  if(changed)renderPlayers();},500);
+</script>
+</body>
+
+</html>
