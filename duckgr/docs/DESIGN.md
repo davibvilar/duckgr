@@ -206,6 +206,26 @@ Uma melhoria em relação ao Factorio: lá o jogador anda com o teclado e só ag
 
 Ficaram de fora de propósito, para os próximos pedaços: fauna, água em rede, estradas e carroças, horta e fazendas, saúde do solo, pegadas maiores que 1×1, insersores e esteiras. A tela de montagem já deixa escolher semente, tamanho do mapa, floresta, recursos e metas, e a partida é salva como lista de comandos e refeita no carregamento, o que testa o determinismo a cada vez que alguém abre o jogo.
 
+### Como a partida é salva
+
+Como o mundo é determinístico, há duas formas de guardar uma partida: o **estado atual** (a foto do mundo agora) ou o **registro de comandos** (o filme, refeito do zero ao abrir). Medimos as duas com um jogador-robô que dá uma ordem a cada três segundos:
+
+| Partida | Comandos | Registro (JSON / gzip) | Estado atual (JSON / gzip) | Refazer tudo do zero |
+| --- | --- | --- | --- | --- |
+| 30 min, mapa 40×24 | 525 | 42 KB / 3,7 KB | 46 KB / 3,4 KB | 0,2 s |
+| 2 h, mapa 56×32 | 2.177 | 178 KB / 15 KB | 92 KB / 6 KB | 1,9 s |
+
+O registro cresce com o tempo de jogo, uns 7 KB por hora depois de comprimido, e não depende do tamanho do mapa. O estado cresce com o mapa e não depende do tempo. Os dois são pequenos. O que pesa é o **tempo para abrir**: refazer horas de jogo leva segundos, e num mapa grande leva mais.
+
+Por isso o save tem as duas coisas, comprimidas com gzip:
+
+- um **checkpoint**, o estado inteiro do mundo, tirado a cada 5 minutos de jogo;
+- o **histórico** de todos os comandos com autor e tick. Ao abrir, o jogo carrega o checkpoint e refaz só os comandos posteriores, no máximo 5 minutos de jogo. O histórico inteiro continua no arquivo para rever a partida, conferir o hash e, no futuro, para a facilitação e o multiplayer.
+
+O arquivo guarda também o hash do mundo no momento do save. Ao abrir, o mundo refeito precisa dar o mesmo hash, o que testa o determinismo a cada carregamento. Uma partida de duas horas fica em torno de 20 KB. Ela cabe no navegador, num arquivo `.duckgr` ou num código de texto que dá para colar numa mensagem.
+
+Para mapas de missão de 256×256, o estado em JSON passaria de 3 MB antes da compressão. Quando o núcleo for para Rust, o checkpoint vira binário: as camadas em vetores por chunk, que é o formato da memória, com RLE e gzip. Uma estimativa grosseira fica na casa de 100 a 200 KB. O histórico não muda.
+
 ## Indo além do Factorio: lições da história e da ficção
 
 O Factorio começa numa fábrica e só tem uma relação com o mundo: extrair e poluir. A história humana e a boa ficção científica mostram um percurso muito mais rico — fogo, agricultura, cidades, crises e reconstruções — e cada etapa sugere uma mecânica. Esta seção é um banco de ideias candidatas; as que forem aprovadas sobem para a Proposta temática.

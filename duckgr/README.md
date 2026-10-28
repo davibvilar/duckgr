@@ -29,6 +29,7 @@ npm run servir    # abre um servidor em http://localhost:8000
 
 - `web/plataforma/`: a plataforma. Não sabe que existe árvore, fornalha ou poluição.
   - `nucleo.js`: células em camadas, elementos feitos de componentes, campos por chunk, comandos, ticks e hash do estado.
+  - `persistencia.js`: o save (checkpoint do estado + histórico de comandos, em JSON com gzip), exportar e importar.
   - `jogador.js`: o jogador como agente (posição, velocidade, alcance), caminho até o alvo, fila de ordens e as ações genéricas (colher, minerar, plantar, construir, recolher, abastecer, fornecer, desmontar).
   - `gerador.js`: gera o mapa a partir das regras do pacote.
   - `desenho.js`: desenha o mundo num canvas, com a aparência que o pacote define.

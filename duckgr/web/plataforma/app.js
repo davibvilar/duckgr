@@ -5,6 +5,7 @@
 import * as N from "./nucleo.js";
 import { desenharMundo, posJogador } from "./desenho.js";
 import { acoesPossiveis, velocidadeCelulasPorSegundo } from "./jogador.js";
+import * as Save from "./persistencia.js";
 import { PACOTES, PACOTE_PADRAO, EM_BREVE } from "../jogos/catalogo.js";
 
 const $ = s => document.querySelector(s);
@@ -12,7 +13,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const ler = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } };
 const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* sem armazenamento: segue sem salvar */ } };
 const apagar = k => { try { localStorage.removeItem(k); } catch { /* idem */ } };
-const CHAVE_PARTIDA = "duckgr:partida", CHAVE_PREFS = "duckgr:prefs";
+const CHAVE_PARTIDA = "duckgr:partida", CHAVE_SAVE = "duckgr:save", CHAVE_PREFS = "duckgr:prefs";
 
 const PREFS_PADRAO = { velocidade: 1, dicas: true };
 let prefs = { ...PREFS_PADRAO, ...ler(CHAVE_PREFS, {}) };
@@ -27,10 +28,11 @@ const flutuantes = []; // textos "+1 madeira" que sobem acima do pato
 let hover = null, celSel = null, pausado = false, tela = "jogo", hashVisto = "";
 
 // ---------- partida
-function iniciar(partida, ateTick = 0) {
-  P = { pacote: partida.pacote, cfg: partida.cfg || {}, cmds: partida.cmds || [] };
+// partida = { pacote, cfg, cmds, checkpoint? }; estado já pronto (de um save) é opcional
+function iniciar(partida, ateTick = 0, estado = null) {
+  P = { pacote: partida.pacote, cfg: partida.cfg || {}, cmds: partida.cmds || [], checkpoint: partida.checkpoint || null };
   C = pacote(P.pacote);
-  S = ateTick ? N.rodar(C, P.cfg, P.cmds, ateTick) : N.novoEstado(C, P.cfg);
+  S = estado || (ateTick ? N.rodar(C, P.cfg, P.cmds, ateTick) : N.novoEstado(C, P.cfg));
   construindo = null; celSel = null; menuFixo = null; pausado = false; cam.iniciada = false;
   $("#nomeMundo").textContent = C.nome;
   document.title = `DuckGR · ${C.nome}`;
@@ -39,7 +41,20 @@ function iniciar(partida, ateTick = 0) {
   salvar();
 }
 function novoPadrao() { iniciar({ pacote: PACOTE_PADRAO, cfg: {}, cmds: [] }); }
-function salvar() { gravar(CHAVE_PARTIDA, { ...P, versao: C.versao, tick: S.tick }); }
+// Salva no navegador: checkpoint + comandos, em JSON comprimido (base64).
+let salvando = false, ultimoTamanho = null;
+async function salvar() {
+  if (!S || salvando) return;
+  salvando = true;
+  try {
+    const json = JSON.stringify(Save.montarSave(C, P, S));
+    const gz = await Save.comprimir(json);
+    ultimoTamanho = { json: json.length, gz: gz.length, tick: S.tick };
+    gravar(CHAVE_SAVE, Save.paraBase64(gz));
+    apagar(CHAVE_PARTIDA); // formato antigo (só a lista de comandos)
+  } catch (err) { console.error("Não deu para salvar.", err); }
+  finally { salvando = false; }
+}
 
 function comando(cmd, silencioso = false) {
   cmd.t = S.tick; cmd.autor = "jogador";
@@ -60,6 +75,7 @@ function quadro(agora) {
       const ms = 1000 / N.TPS;
       let n = 0;
       while (acc >= ms && n < 60) { N.passo(S, C); acc -= ms; n++; }
+      if (n) Save.talvezCheckpoint(P, S); // logo depois dos passos, antes de novos comandos
       if (n >= 60) acc = 0;
       if (S.eventos.length) tratarEventos();
     }
@@ -500,9 +516,10 @@ function conferirReplay() {
 // ---------- telas
 function ir(t) {
   tela = t;
-  for (const [id, nome] of [["#telaJogo", "jogo"], ["#telaMenu", "menu"], ["#telaConfigurar", "configurar"], ["#telaMontar", "montar"]]) $(id).hidden = nome !== t;
+  for (const [id, nome] of [["#telaJogo", "jogo"], ["#telaMenu", "menu"], ["#telaConfigurar", "configurar"], ["#telaMontar", "montar"], ["#telaSalvar", "salvar"]]) $(id).hidden = nome !== t;
   if (t === "configurar") renderPrefs();
   if (t === "montar") renderMontar();
+  if (t === "salvar") renderSalvar();
   if (t === "jogo") { dimensionar(); renderPaineis(); }
   renderTopo();
   window.scrollTo(0, 0);
@@ -520,7 +537,7 @@ function renderPrefs() {
     gravar(CHAVE_PREFS, prefs);
   };
 }
-$("#apagarSave").onclick = () => { apagar(CHAVE_PARTIDA); novoPadrao(); aviso("Partida apagada. Novo jogo no mundo padrão."); };
+$("#apagarSave").onclick = () => { apagar(CHAVE_PARTIDA); apagar(CHAVE_SAVE); novoPadrao(); aviso("Partida apagada. Novo jogo no mundo padrão."); };
 
 // Montar mundo: pacote, mapa, floresta, recursos e metas, com prévia
 let montagem = null;
@@ -560,6 +577,67 @@ function previa() {
 }
 $("#comecarMontado").onclick = () => { iniciar({ pacote: montagem.pacote, cfg: cfgMontada(), cmds: [] }); ir("jogo"); aviso("Mundo montado. Bom jogo!"); };
 
+// Salvar e carregar: arquivo .duckgr = o save em JSON comprimido com gzip
+const kb = n => `${(n / 1024).toFixed(1).replace(".", ",")} KB`;
+async function renderSalvar() {
+  await salvar();
+  const save = Save.montarSave(C, P, S);
+  const partes = [
+    [save.checkpoint.estado ? "Estado do mundo (checkpoint)" : "Estado do mundo (ainda refeito da semente)", save.checkpoint.estado ? { tick: save.checkpoint.tick, estado: save.checkpoint.estado } : null],
+    ["Comandos desde o checkpoint", save.historico.filter(c => c.t >= save.checkpoint.tick)],
+    ["Histórico completo (para rever a partida)", save.historico],
+  ];
+  let linhas = `<span>Parte</span><span>JSON</span><span>gzip</span>`;
+  for (const [nome, dado] of partes) {
+    const j = dado ? JSON.stringify(dado) : "";
+    const g = j ? (await Save.comprimir(j)).length : 0;
+    linhas += `<span>${esc(nome)}</span><b>${kb(j.length)}</b><b>${kb(g)}</b>`;
+  }
+  linhas += `<span class="tot">Arquivo inteiro</span><b class="tot">${kb(ultimoTamanho.json)}</b><b class="tot">${kb(ultimoTamanho.gz)}</b>`;
+  const cpMin = Math.floor((S.tick - save.checkpoint.tick) / N.TPS / 60);
+  const desde = save.historico.filter(c => c.t >= save.checkpoint.tick).length;
+  $("#saveInfo").innerHTML = `<div class="tam">${linhas}</div><p class="hint" style="margin:8px 0 0">${P.cmds.length === 1 ? "1 comando" : `${P.cmds.length} comandos`} em ${relogio(S.tick)} de jogo. ${save.checkpoint.estado ? `Último checkpoint há ${cpMin} min (tick ${save.checkpoint.tick}); ao abrir, o jogo refaz só ${desde} comandos.` : `Ainda sem checkpoint (o primeiro sai aos 5 min de jogo); ao abrir, o jogo refaz tudo desde o começo.`}</p>`;
+  // dentro de um quadro (como no Claude), baixar arquivos é bloqueado: fica só o código
+  const emQuadro = window.self !== window.top;
+  $("#baixarSave").hidden = emQuadro;
+  $("#exportInfo").textContent = emQuadro ? "Aqui dentro não dá para baixar arquivos. Copie o código e cole numa mensagem; para abrir, cole o código abaixo, em qualquer aparelho." : "O código é o mesmo arquivo em texto: dá para colar numa mensagem e abrir em outro aparelho.";
+}
+async function bytesDoSave() { return Save.comprimir(JSON.stringify(Save.montarSave(C, P, S))); }
+$("#baixarSave").onclick = async () => {
+  const url = URL.createObjectURL(new Blob([await bytesDoSave()], { type: "application/gzip" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = `${C.id}-${relogio(S.tick).replace(":", "m")}s.duckgr`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+};
+$("#copiarSave").onclick = async () => {
+  const txt = Save.paraBase64(await bytesDoSave());
+  try { await navigator.clipboard.writeText(txt); aviso(`Código copiado (${kb(txt.length)}).`); }
+  catch { const t = $("#codigoSave"); t.value = txt; t.select(); aviso("Não deu para copiar sozinho: o código está selecionado na caixa abaixo."); }
+};
+async function abrirSaveDeBytes(bytes) {
+  try {
+    const save = JSON.parse(await Save.descomprimir(bytes));
+    const Cs = pacote(save.pacote?.id);
+    const { S: est, ok } = Save.carregarSave(Cs, save);
+    iniciar({ pacote: Cs.id, cfg: save.cfg, cmds: save.historico, checkpoint: save.checkpoint }, 0, est);
+    ir("jogo");
+    if (ok) aviso(`Partida aberta: ${relogio(S.tick)} de jogo.`);
+    else alerta("Partida aberta, com diferença", "<p>O mundo refeito não bateu com o hash guardado no arquivo. A partida abriu, mas pode estar um pouco diferente de quando foi salva.</p>", "Ok", "ruim");
+  } catch (err) {
+    alerta("Não deu para abrir", `<p>${esc(err.message || "O arquivo não é um save válido.")}</p>`, "Ok", "ruim");
+  }
+}
+$("#arquivoSave").onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  await abrirSaveDeBytes(new Uint8Array(await f.arrayBuffer()));
+  e.target.value = "";
+};
+$("#colarSave").onclick = () => {
+  const txt = $("#codigoSave").value.trim();
+  if (!txt) return aviso("Cole o código do save na caixa.");
+  try { abrirSaveDeBytes(Save.deBase64(txt)); } catch { alerta("Não deu para abrir", "<p>O código colado não é um save válido. Confira se veio inteiro.</p>", "Ok", "ruim"); }
+};
+
 // ---------- avisos
 let tAviso;
 function aviso(m) { const t = $("#toast"); t.textContent = m; t.hidden = false; clearTimeout(tAviso); tAviso = setTimeout(() => (t.hidden = true), 2200); }
@@ -580,15 +658,25 @@ function comoJogar() {
 }
 
 // ---------- partida: entra direto num jogo, sem menu no caminho
-const salvo = ler(CHAVE_PARTIDA, null);
-try {
-  // partidas de versões antigas do pacote não são refeitas: os comandos mudaram
-  if (salvo && PACOTES.some(p => p.id === salvo.pacote) && salvo.versao === pacote(salvo.pacote).versao) iniciar(salvo, salvo.tick || 0);
-  else novoPadrao();
-} catch (err) {
-  console.error("Partida salva não pôde ser carregada; começando de novo.", err);
+async function abrirSalvo() {
+  try {
+    const b64 = ler(CHAVE_SAVE, null);
+    if (b64) {
+      const save = JSON.parse(await Save.descomprimir(Save.deBase64(b64)));
+      const Cs = pacote(save.pacote.id);
+      const { S: est } = Save.carregarSave(Cs, save);
+      iniciar({ pacote: save.pacote.id, cfg: save.cfg, cmds: save.historico, checkpoint: save.checkpoint }, 0, est);
+      return;
+    }
+    // formato antigo (v0.1 a v0.3): só a lista de comandos, refeita do zero
+    const antigo = ler(CHAVE_PARTIDA, null);
+    if (antigo && PACOTES.some(p => p.id === antigo.pacote) && antigo.versao === pacote(antigo.pacote).versao) return iniciar(antigo, antigo.tick || 0);
+  } catch (err) {
+    console.error("Partida salva não pôde ser carregada; começando de novo.", err);
+  }
   novoPadrao();
 }
+await abrirSalvo();
 ir("jogo");
 if (!ler("duckgr:viuComoJogar2", false)) comoJogar();
 requestAnimationFrame(quadro);

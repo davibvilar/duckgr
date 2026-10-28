@@ -60,6 +60,7 @@
       <button class="opcao prim" data-ir="jogo"><h2>Continuar</h2><p>Voltar para o mundo em andamento.</p></button>
       <button class="opcao" id="novoPadrao"><h2>Novo jogo</h2><p>Começa de novo no mundo padrão, sem perguntas.</p></button>
       <button class="opcao" data-ir="montar"><h2>Montar mundo</h2><p>Escolha o pacote, o tamanho do mapa, a floresta, os recursos e as metas.</p></button>
+      <button class="opcao" data-ir="salvar"><h2>Salvar e carregar</h2><p>Leve a partida num arquivo, ou abra uma partida salva. Mostra o tamanho do save.</p></button>
       <button class="opcao" data-ir="configurar"><h2>Configurações</h2><p>Velocidade, zoom e outras preferências deste aparelho.</p></button>
       <button class="opcao" id="comoJogar"><h2>Como jogar</h2><p>Os primeiros passos da primeira era.</p></button>
     </div>
@@ -74,6 +75,25 @@
       <h3>Partida salva</h3>
       <p class="muted small" style="margin:0">A partida é salva neste navegador como uma lista de comandos. Ao abrir de novo, o mundo é refeito comando a comando.</p>
       <div class="acoes"><button class="btn perigo" id="apagarSave">Apagar partida salva</button></div>
+    </section>
+    <div class="acoes"><button class="btn prim" data-ir="jogo">Voltar ao jogo</button><button class="btn" data-ir="menu">Menu</button></div>
+  </main>
+
+  <!-- TELA: SALVAR E CARREGAR -->
+  <main id="telaSalvar" class="wrap" hidden>
+    <h1 class="tela-tit">Salvar e carregar</h1>
+    <p class="muted" style="margin:0;max-width:65ch">A partida é salva sozinha neste navegador a cada poucos segundos. Aqui você leva a partida para outro aparelho ou guarda uma cópia.</p>
+    <section class="card"><h3>Tamanho deste save</h3><div id="saveInfo" class="muted">Calculando…</div></section>
+    <section class="card">
+      <h3>Levar a partida</h3>
+      <div class="acoes"><button class="btn prim" id="baixarSave">Baixar arquivo .duckgr</button><button class="btn" id="copiarSave">Copiar código do save</button></div>
+      <p class="hint" style="margin:0" id="exportInfo">O código é o mesmo arquivo em texto: dá para colar numa mensagem e abrir em outro aparelho.</p>
+    </section>
+    <section class="card">
+      <h3>Abrir uma partida</h3>
+      <div class="acoes"><label class="btn" for="arquivoSave" style="cursor:pointer">Abrir arquivo…</label><input type="file" id="arquivoSave" accept=".duckgr,application/gzip,application/json" hidden></div>
+      <div class="campo"><label for="codigoSave">Ou cole o código do save</label><textarea id="codigoSave" rows="3" placeholder="H4sIA…"></textarea></div>
+      <div class="acoes"><button class="btn" id="colarSave">Abrir pelo código</button></div>
     </section>
     <div class="acoes"><button class="btn prim" data-ir="jogo">Voltar ao jogo</button><button class="btn" data-ir="menu">Menu</button></div>
   </main>

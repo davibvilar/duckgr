@@ -180,3 +180,9 @@ body.imersivo .tools .seg{flex-wrap:nowrap;flex:none}
   .seg button{min-height:44px}
   .tecla{display:none}
 }
+
+/* v0.4: salvar e carregar */
+.campo textarea{background:var(--panel2);border:2px solid transparent;border-radius:10px;padding:8px 10px;min-width:0;font:12px/1.4 ui-monospace,Menlo,monospace;color:var(--ink);resize:vertical}
+.tam{display:grid;grid-template-columns:1fr auto auto;gap:4px 16px;font-size:13px;font-variant-numeric:tabular-nums}
+.tam b{color:var(--ink)} .tam span:nth-child(3n+1){color:var(--muted);font-weight:700}
+.tam .tot{border-top:1px solid var(--panel3);padding-top:4px}
