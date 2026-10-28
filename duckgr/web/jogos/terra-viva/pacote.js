@@ -8,7 +8,7 @@
 export default {
   id: "terra-viva",
   nome: "Terra Viva",
-  versao: "0.2.0",
+  versao: "0.3.0",
   descricao: "Primeira era: carvão e vapor. Produza sem devastar a floresta.",
 
   mapa: {

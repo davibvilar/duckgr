@@ -3,7 +3,7 @@
 // específico do mundo vem do pacote compilado (C).
 
 import * as N from "./nucleo.js";
-import { desenharMundo } from "./desenho.js";
+import { desenharMundo, posJogador } from "./desenho.js";
 import { acoesPossiveis, velocidadeCelulasPorSegundo } from "./jogador.js";
 import { PACOTES, PACOTE_PADRAO, EM_BREVE } from "../jogos/catalogo.js";
 
@@ -14,7 +14,7 @@ const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } c
 const apagar = k => { try { localStorage.removeItem(k); } catch { /* idem */ } };
 const CHAVE_PARTIDA = "duckgr:partida", CHAVE_PREFS = "duckgr:prefs";
 
-const PREFS_PADRAO = { velocidade: 1, zoom: "auto", dicas: true };
+const PREFS_PADRAO = { velocidade: 1, dicas: true };
 let prefs = { ...PREFS_PADRAO, ...ler(CHAVE_PREFS, {}) };
 
 const compilados = {};
@@ -31,7 +31,7 @@ function iniciar(partida, ateTick = 0) {
   P = { pacote: partida.pacote, cfg: partida.cfg || {}, cmds: partida.cmds || [] };
   C = pacote(P.pacote);
   S = ateTick ? N.rodar(C, P.cfg, P.cmds, ateTick) : N.novoEstado(C, P.cfg);
-  construindo = null; celSel = null; menuFixo = null; pausado = false;
+  construindo = null; celSel = null; menuFixo = null; pausado = false; cam.iniciada = false;
   $("#nomeMundo").textContent = C.nome;
   document.title = `DuckGR · ${C.nome}`;
   dimensionar();
@@ -88,30 +88,64 @@ function tratarEventos() {
   }
 }
 
-// ---------- desenho
+// ---------- desenho e câmera
+// O canvas tem o tamanho do tabuleiro na tela; a câmera diz qual pedaço do
+// mundo aparece nele (deslocamento em pixels e tamanho da célula = zoom).
 const cv = $("#cv"), ctx = cv.getContext("2d");
-let cs = 20;
+let cs = 24, larg = 600, alt = 400;
+const cam = { x: 0, y: 0, seguir: true, iniciada: false };
+const ZOOM_MAX = 72;
+const zoomMin = () => Math.max(6, Math.min(larg / S.L, alt / S.A));
 function dimensionar() {
   if (!S) return;
-  const w = $("#tabuleiro").clientWidth || 600;
-  cs = prefs.zoom === "auto" ? Math.max(14, Math.floor(w / S.L)) : Number(prefs.zoom);
+  const b = $("#tabuleiro");
+  larg = b.clientWidth || 600; alt = b.clientHeight || 400;
   const dpr = window.devicePixelRatio || 1;
-  cv.width = S.L * cs * dpr; cv.height = S.A * cs * dpr;
-  cv.style.width = S.L * cs + "px"; cv.style.height = S.A * cs + "px";
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cv.width = Math.round(larg * dpr); cv.height = Math.round(alt * dpr);
+  if (!cam.iniciada) {
+    // celular: começa perto do pato, com células grandes para o dedo; computador: o mapa na largura
+    cs = matchMedia("(pointer:coarse)").matches ? 34 : Math.max(zoomMin(), Math.min(36, larg / S.L));
+    cam.iniciada = true; cam.seguir = true;
+    centrar(S.jog.x + 0.5, S.jog.y + 0.5);
+  }
+  cs = Math.max(zoomMin(), Math.min(ZOOM_MAX, cs));
+  limitarCam();
 }
+function limitarCam() {
+  const W = S.L * cs, H = S.A * cs;
+  cam.x = W <= larg ? (W - larg) / 2 : Math.max(0, Math.min(W - larg, cam.x));
+  cam.y = H <= alt ? (H - alt) / 2 : Math.max(0, Math.min(H - alt, cam.y));
+}
+function centrar(wx, wy) { cam.x = wx * cs - larg / 2; cam.y = wy * cs - alt / 2; limitarCam(); }
+// zoom mantendo fixo o ponto da tela (sx, sy)
+function zoomEm(fator, sx = larg / 2, sy = alt / 2) {
+  const wx = (sx + cam.x) / cs, wy = (sy + cam.y) / cs;
+  cs = Math.max(zoomMin(), Math.min(ZOOM_MAX, cs * fator));
+  cam.x = wx * cs - sx; cam.y = wy * cs - sy;
+  limitarCam(); renderMenuCel();
+}
+function marcarSeguir(v) { cam.seguir = v; $("#seguir").setAttribute("aria-pressed", v); }
 window.addEventListener("pagehide", () => { if (S) salvar(); });
 document.addEventListener("visibilitychange", () => { if (S && document.hidden) salvar(); });
-window.addEventListener("resize", () => { dimensionar(); if (tela === "montar") previa(); });
+window.addEventListener("resize", () => { dimensionar(); renderMenuCel(); if (tela === "montar") previa(); });
 
 function desenhar(t) {
+  if (cam.seguir) { // a câmera acompanha o pato, suavemente
+    const p = posJogador(S, C), alvoX = (p.x + 0.5) * cs - larg / 2, alvoY = (p.y + 0.5) * cs - alt / 2;
+    cam.x += (alvoX - cam.x) * 0.15; cam.y += (alvoY - cam.y) * 0.15; limitarCam();
+  }
+  const dpr = window.devicePixelRatio || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.fillStyle = "#1d2a3a"; ctx.fillRect(0, 0, larg, alt);
+  ctx.translate(-Math.round(cam.x), -Math.round(cam.y));
+  const vis = { x0: Math.floor(cam.x / cs), y0: Math.floor(cam.y / cs), x1: Math.ceil((cam.x + larg) / cs), y1: Math.ceil((cam.y + alt) / cs) };
   desenharMundo(ctx, S, C, {
-    cs, t, verCampo, hover,
+    cs, t, verCampo, hover, vis,
     fantasma: construindo && hover && !S.occ[N.idx(S, hover.x, hover.y)] ? construindo : null,
     corCursor: construindo ? "#8fd16a" : "#ffffff",
   });
   // textos flutuantes de ganho
-  ctx.font = `800 ${Math.max(12, cs * 0.55)}px Nunito, system-ui, sans-serif`; ctx.textAlign = "center";
+  ctx.font = `800 ${Math.max(12, Math.min(20, cs * 0.55))}px Nunito, system-ui, sans-serif`; ctx.textAlign = "center";
   for (let k = flutuantes.length - 1; k >= 0; k--) {
     const f = flutuantes[k], dt = t - f.t0;
     if (dt > 1400) { flutuantes.splice(k, 1); continue; }
@@ -145,29 +179,101 @@ function ordenar(a, adicionar) {
 
 function celulaDe(e) {
   const r = cv.getBoundingClientRect();
-  const x = Math.floor(((e.clientX - r.left) / r.width) * S.L), y = Math.floor(((e.clientY - r.top) / r.height) * S.A);
+  const x = Math.floor((e.clientX - r.left + cam.x) / cs), y = Math.floor((e.clientY - r.top + cam.y) / cs);
   return x < 0 || y < 0 || x >= S.L || y >= S.A ? null : { x, y };
 }
-cv.addEventListener("pointerdown", e => {
+
+// Toque e mouse no mesmo esquema: arrastar move a câmera; dois dedos (pinça)
+// dão zoom; um toque/clique curto, sem arrastar, é uma ação na célula.
+const dedos = new Map();
+let gesto = null; // { x, y, camX, camY, moveu, dist, meio }
+function tocar(e) {
   const c = celulaDe(e); if (!c) return;
   celSel = c;
   if (construindo) { ordenar({ ...c, acao: "construir", elemento: construindo }, e.shiftKey); return; }
   if (e.pointerType === "mouse") { menuFixo = null; ordenar(opcoes(c).padrao, e.shiftKey); }
-  else { hover = null; menuFixo = c; renderMenuCel(); }
+  else { hover = null; menuFixo = c; renderMenuCel(); renderCelula(); }
+}
+const ptLocal = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+cv.addEventListener("pointerdown", e => {
+  try { cv.setPointerCapture(e.pointerId); } catch { /* ponteiro já saiu */ }
+  dedos.set(e.pointerId, ptLocal(e));
+  if (dedos.size === 1) gesto = { ...ptLocal(e), camX: cam.x, camY: cam.y, moveu: false, botao: e.button };
+  else if (dedos.size === 2) {
+    const [a, b] = [...dedos.values()];
+    gesto = { moveu: true, dist: Math.hypot(a.x - b.x, a.y - b.y), meio: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
+  }
 });
 cv.addEventListener("pointermove", e => {
+  if (dedos.has(e.pointerId)) {
+    dedos.set(e.pointerId, ptLocal(e));
+    if (dedos.size === 2 && gesto?.dist) {
+      const [a, b] = [...dedos.values()];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y), meio = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      marcarSeguir(false);
+      cam.x -= meio.x - gesto.meio.x; cam.y -= meio.y - gesto.meio.y;
+      zoomEm(dist / gesto.dist, meio.x, meio.y);
+      gesto.dist = dist; gesto.meio = meio;
+      return;
+    }
+    if (dedos.size === 1 && gesto) {
+      const p = ptLocal(e), dx = p.x - gesto.x, dy = p.y - gesto.y;
+      if (!gesto.moveu && Math.hypot(dx, dy) > 8) { gesto.moveu = true; marcarSeguir(false); $("#tabuleiro").classList.add("arrastando"); menuFixo = null; }
+      if (gesto.moveu) { cam.x = gesto.camX - dx; cam.y = gesto.camY - dy; limitarCam(); renderMenuCel(); }
+      return;
+    }
+  }
   if (e.pointerType !== "mouse") return;
   const c = celulaDe(e);
   if (c && hover && c.x === hover.x && c.y === hover.y) return;
   hover = c; menuFixo = null; renderMenuCel(); renderCelula();
 });
+function soltar(e, cancelou) {
+  if (!dedos.has(e.pointerId)) return;
+  dedos.delete(e.pointerId);
+  $("#tabuleiro").classList.remove("arrastando");
+  if (dedos.size === 0) {
+    if (!cancelou && gesto && !gesto.moveu && !gesto.dist && gesto.botao === 0) tocar(e);
+    gesto = null;
+  } else if (dedos.size === 1) { // saiu um dedo da pinça: continua arrastando com o outro
+    const [p] = [...dedos.values()];
+    gesto = { ...p, camX: cam.x, camY: cam.y, moveu: true };
+  }
+}
+cv.addEventListener("pointerup", e => soltar(e, false));
+cv.addEventListener("pointercancel", e => soltar(e, true));
 cv.addEventListener("pointerleave", e => {
-  if (e.relatedTarget && $("#menuCel").contains(e.relatedTarget)) return;
+  if (e.pointerType !== "mouse" || dedos.size) return;
   hover = null; renderMenuCel();
 });
-$("#menuCel").addEventListener("pointerleave", e => {
-  if (e.relatedTarget === cv) return;
-  hover = null; renderMenuCel();
+cv.addEventListener("wheel", e => {
+  e.preventDefault();
+  const p = ptLocal(e);
+  marcarSeguir(false);
+  zoomEm(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), p.x, p.y);
+}, { passive: false });
+cv.addEventListener("contextmenu", e => e.preventDefault());
+
+$("#zoomMais").onclick = () => zoomEm(1.25);
+$("#zoomMenos").onclick = () => zoomEm(0.8);
+$("#seguir").onclick = () => marcarSeguir(!cam.seguir);
+$("#pausar2").onclick = () => { pausado = !pausado; renderTopo(); };
+$("#telaCheia").onclick = () => alternarTelaCheia();
+
+// Tela cheia: usa a API do navegador quando existe; no iPhone, que não deixa,
+// o modo imersivo (o tabuleiro ocupando a janela) já resolve.
+function alternarTelaCheia(ligar = !document.body.classList.contains("imersivo")) {
+  document.body.classList.toggle("imersivo", ligar);
+  $("#telaCheia").textContent = ligar ? "✕" : "⛶";
+  $("#telaCheia").setAttribute("aria-label", ligar ? "Sair da tela cheia" : "Tela cheia");
+  try {
+    if (ligar && !document.fullscreenElement) document.documentElement.requestFullscreen?.()?.catch(() => {});
+    if (!ligar && document.fullscreenElement) document.exitFullscreen?.()?.catch(() => {});
+  } catch { /* sem tela cheia de verdade: fica o modo imersivo */ }
+  requestAnimationFrame(() => { dimensionar(); renderMenuCel(); });
+}
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && document.body.classList.contains("imersivo")) alternarTelaCheia(false);
 });
 
 document.addEventListener("keydown", e => {
@@ -185,6 +291,12 @@ document.addEventListener("keydown", e => {
   if (invAberto) return;
   if (k === " ") { e.preventDefault(); pausado = !pausado; return renderTopo(); }
   if (k === "V") return $("#verCampo").click();
+  if (k === "+" || k === "=") return zoomEm(1.25);
+  if (k === "-" || k === "_") return zoomEm(0.8);
+  if (k === "H") return marcarSeguir(true);
+  if (k === "T") return alternarTelaCheia();
+  const setas = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[k];
+  if (setas) { e.preventDefault(); marcarSeguir(false); cam.x += setas[0] * cs * 3; cam.y += setas[1] * cs * 3; limitarCam(); return renderMenuCel(); }
   const c = hover || menuFixo;
   if (!c) return;
   const a = opcoes(c).acoes.find(a => a.tecla === k);
@@ -195,20 +307,23 @@ function renderMenuCel() {
   const el = $("#menuCel"), c = hover || menuFixo;
   if (!c || !S || invAberto) { el.hidden = true; return; }
   const o = opcoes(c);
-  const linhas = o.acoes.map((a, k) => `<button class="ac ${a === o.padrao && !menuFixo ? "padrao" : ""}" data-ac="${k}"><span class="tecla">${esc(a.tecla)}</span><span>${esc(a.rotulo)}${a.detalhe ? `<small>${esc(a.detalhe)}</small>` : ""}</span></button>`).join("");
+  const linhas = o.acoes.map((a, k) => menuFixo
+    ? `<div class="linha-ac"><button class="ac" data-ac="${k}"><span>${esc(a.rotulo)}${a.detalhe ? `<small>${esc(a.detalhe)}</small>` : ""}</span></button><button class="mais" data-ac="${k}" data-fila="1" aria-label="Pôr na fila">+ fila</button></div>`
+    : `<button class="ac ${a === o.padrao ? "padrao" : ""}" data-ac="${k}"><span class="tecla">${esc(a.tecla)}</span><span>${esc(a.rotulo)}${a.detalhe ? `<small>${esc(a.detalhe)}</small>` : ""}</span></button>`).join("");
   const notas = o.notas.map(n => `<div class="nota ${n.tipo}">${esc(n.txt)}</div>`).join("");
-  const dica = menuFixo ? "Toque numa ação. Ela entra no lugar das tarefas atuais." : "Clique: ação destacada · Tecla: atalho · Shift: põe na fila";
+  const dica = menuFixo ? "Toque numa ação: o pato larga o que fazia e vai. “+ fila” faz depois das outras." : "Clique: ação destacada · Tecla: atalho · Shift: põe na fila · Arraste: move o mapa";
   html(el, `<div class="tit"><span>${esc(o.titulo || "")} <span class="small muted">(${c.x}, ${c.y})</span></span>${menuFixo ? `<button data-fecharmenu="1" aria-label="Fechar">×</button>` : ""}</div>${notas}${linhas || `<div class="nota">Nada a fazer aqui.</div>`}<div class="rodape">${dica}</div>`);
   el.__acoes = o.acoes;
   el.hidden = false;
   // no mouse o menu só informa (não pode tapar a célula vizinha); no toque ele é clicável
   el.classList.toggle("fixo", !!menuFixo);
-  // posiciona ao lado da célula, sem sair da área visível do tabuleiro
-  const b = $("#tabuleiro"), w = el.offsetWidth, h = el.offsetHeight;
-  let x = (c.x + 1) * cs + 12, y = c.y * cs + cs;
-  if (x + w > b.scrollLeft + b.clientWidth) x = c.x * cs - w - 8;
-  x = Math.max(b.scrollLeft + 4, x);
-  y = Math.max(b.scrollTop + 4, Math.min(y, b.scrollTop + b.clientHeight - h - 4));
+  if (menuFixo) return; // no toque o menu é uma folha fixa embaixo do tabuleiro
+  // posiciona ao lado da célula (em coordenadas da tela), sem sair do tabuleiro
+  const w = el.offsetWidth, h = el.offsetHeight;
+  let x = (c.x + 1) * cs - cam.x + 12, y = (c.y + 1) * cs - cam.y;
+  if (x + w > larg - 56) x = c.x * cs - cam.x - w - 8;
+  x = Math.max(4, x);
+  y = Math.max(4, Math.min(y, alt - h - 4));
   el.style.left = x + "px"; el.style.top = y + "px";
 }
 
@@ -227,6 +342,7 @@ function renderPaineis() {
 }
 
 function renderTopo() {
+  $("#pausar2").textContent = pausado ? "▶" : "⏸";
   html($("#topo"), tela === "jogo"
     ? `<span class="era-badge">Era ${S.era} · ${esc(C.eras[S.era - 1].nome)}</span><button class="btn" id="pausar">${pausado ? "▶ Continuar" : "⏸ Pausar"}</button><button class="btn" data-ir="menu">Menu</button>`
     : `<button class="btn prim" data-ir="jogo">Voltar ao jogo</button>`);
@@ -358,7 +474,7 @@ document.addEventListener("click", e => {
   const d = b.dataset;
   if (d.ir) return ir(d.ir);
   if (d.construir) { construindo = construindo === d.construir ? null : d.construir; return renderConstrucoes(); }
-  if (d.ac) { const a = $("#menuCel").__acoes?.[Number(d.ac)]; menuFixo = null; ordenar(a, e.shiftKey); return renderMenuCel(); }
+  if (d.ac) { const a = $("#menuCel").__acoes?.[Number(d.ac)]; menuFixo = null; ordenar(a, e.shiftKey || !!d.fila); return renderMenuCel(); }
   if (d.fecharmenu) { menuFixo = null; return renderMenuCel(); }
   if (b.id === "cancelarFila") return comando({ tipo: "cancelar" });
   if (b.id === "abrirInv" || b.id === "abrirInv2") return alternarInv(true);
@@ -397,9 +513,8 @@ function renderPrefs() {
   const sel = (id, rot, ajuda, opcoes) => `<div class="campo"><label for="${id}">${rot}</label><select id="${id}">${opcoes.map(([v, t]) => `<option value="${v}" ${String(prefs[id]) === String(v) ? "selected" : ""}>${t}</option>`).join("")}</select><span class="ajuda">${ajuda}</span></div>`;
   $("#formPrefs").innerHTML =
     sel("velocidade", "Velocidade do tempo", "Acelera o relógio da tela. O mundo continua determinístico.", [[0.5, "Devagar (0,5×)"], [1, "Normal (1×)"], [2, "Rápida (2×)"], [4, "Muito rápida (4×)"]]) +
-    sel("zoom", "Tamanho das células", "Automático cabe na largura da tela.", [["auto", "Automático"], [16, "Pequeno"], [22, "Médio"], [30, "Grande"]]) +
     sel("dicas", "Dicas das ferramentas", "Mostra a linha de ajuda acima do mapa.", [[true, "Mostrar"], [false, "Esconder"]]);
-  for (const id of ["velocidade", "zoom", "dicas"]) $("#" + id).onchange = ev => {
+  for (const id of ["velocidade", "dicas"]) $("#" + id).onchange = ev => {
     const v = ev.target.value;
     prefs[id] = id === "velocidade" ? Number(v) : id === "dicas" ? v === "true" : v;
     gravar(CHAVE_PREFS, prefs);
@@ -479,4 +594,4 @@ if (!ler("duckgr:viuComoJogar2", false)) comoJogar();
 requestAnimationFrame(quadro);
 
 // para depurar no console do navegador: duckgr.estado(), duckgr.pacote()
-window.duckgr = { estado: () => S, pacote: () => C, partida: () => P };
+window.duckgr = { estado: () => S, pacote: () => C, partida: () => P, camera: () => ({ ...cam, cs }) };

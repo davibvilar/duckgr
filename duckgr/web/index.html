@@ -17,6 +17,7 @@
 
   <!-- TELA: JOGO -->
   <main id="telaJogo" class="wrap">
+    <div class="palco" id="palco">
     <section class="card missao" id="missao"></section>
     <div class="tools">
       <div class="seg" id="construcoes"></div>
@@ -27,7 +28,16 @@
       <div id="fila" class="fila"></div>
     </div>
     <div class="hint" id="dica"></div>
-    <div class="board" id="tabuleiro"><canvas id="cv"></canvas><div class="menu-cel" id="menuCel" hidden></div></div>
+    <div class="board" id="tabuleiro"><canvas id="cv"></canvas><div class="menu-cel" id="menuCel" hidden></div>
+      <div class="cam-ctrl" aria-label="Câmera">
+        <button id="zoomMais" title="Aproximar (+)" aria-label="Aproximar">+</button>
+        <button id="zoomMenos" title="Afastar (−)" aria-label="Afastar">−</button>
+        <button id="seguir" title="Seguir o pato (H)" aria-label="Seguir o pato" aria-pressed="false">◎</button>
+        <button id="pausar2" title="Pausar (Espaço)" aria-label="Pausar">⏸</button>
+        <button id="telaCheia" title="Tela cheia (T)" aria-label="Tela cheia">⛶</button>
+      </div>
+    </div>
+    </div>
     <div class="cols">
       <div class="wrap" style="gap:12px;margin:0;max-width:none">
         <section class="card"><div class="linha"><h3>Inventário</h3><button class="linkbtn" id="abrirInv2">Abrir (E)</button></div><div class="chips" id="inventario"></div><div class="hint" id="infoJogador"></div></section>

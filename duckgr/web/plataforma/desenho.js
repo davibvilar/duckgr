@@ -17,7 +17,10 @@ export function tom(hex, k) {
 // op: { cs, t (tempo em ms, só para animação), hover, fantasma, campo, verCampo }
 export function desenharMundo(ctx, S, C, op) {
   const cs = op.cs;
-  for (let y = 0; y < S.A; y++) for (let x = 0; x < S.L; x++) {
+  // só desenha o que a câmera vê
+  const v = op.vis || { x0: 0, y0: 0, x1: S.L, y1: S.A };
+  const X0 = Math.max(0, v.x0), Y0 = Math.max(0, v.y0), X1 = Math.min(S.L, v.x1), Y1 = Math.min(S.A, v.y1);
+  for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
     const i = idx(S, x, y), px = x * cs, py = y * cs;
     const sb = C.substratos[S.sub[i]].aparencia;
     const n = ruido(x, y);

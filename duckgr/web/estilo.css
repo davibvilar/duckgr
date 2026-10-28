@@ -55,8 +55,9 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .seg button .c{font-size:11px;font-weight:700;opacity:.8}
 .hint{font-size:12px;color:var(--muted)}
 
-.board{position:relative;border-radius:14px;overflow:auto;background:#4f8c41;touch-action:none;max-width:100%}
-.board canvas{display:block}
+.board{position:relative;border-radius:14px;overflow:hidden;background:#3f6f35;touch-action:none;max-width:100%;height:clamp(320px,62vh,680px);user-select:none;-webkit-user-select:none}
+.board canvas{display:block;width:100%;height:100%;cursor:pointer}
+.board.arrastando canvas{cursor:grabbing}
 
 .cols{display:grid;grid-template-columns:1.1fr 1fr;gap:12px}
 @media (max-width:720px){.cols{grid-template-columns:1fr}}
@@ -149,3 +150,33 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .slot .n{position:absolute;top:3px;right:6px;font-weight:800;font-size:13px;font-variant-numeric:tabular-nums}
 .slot.vazio{opacity:.35}
 .menu-cel.fixo{pointer-events:auto}
+
+/* v0.3: câmera, tela cheia e toque */
+.palco{display:flex;flex-direction:column;gap:12px;min-width:0}
+.cam-ctrl{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px;z-index:4}
+.cam-ctrl button{width:44px;height:44px;border-radius:12px;background:rgba(17,27,38,.85);color:var(--ink);font-size:20px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.35)}
+.cam-ctrl button:hover{background:var(--panel3)}
+.cam-ctrl button[aria-pressed="true"]{background:var(--gold);color:var(--leaf-ink)}
+/* menu da célula no toque: folha embaixo, com botões grandes */
+.menu-cel.fixo{left:8px!important;top:auto!important;bottom:8px;max-width:none;min-width:0;font-size:15px;max-height:70%;overflow:auto;right:62px}
+.menu-cel.fixo .ac{min-height:48px;padding:8px 10px}
+.menu-cel .linha-ac{display:flex;gap:6px;align-items:stretch}
+.menu-cel .linha-ac .ac{flex:1}
+.menu-cel .mais{background:var(--panel2);border-radius:8px;padding:0 10px;font-weight:800;color:var(--gold);font-size:13px;white-space:nowrap}
+.menu-cel .tit button{min-width:36px;min-height:36px}
+/* modo imersivo (tela cheia): o palco ocupa a tela toda */
+body.imersivo{overflow:hidden}
+body.imersivo .palco{position:fixed;inset:0;z-index:15;background:var(--sky);gap:6px;
+  padding:max(6px,env(safe-area-inset-top,0px)) max(8px,env(safe-area-inset-right,0px)) max(6px,env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+body.imersivo .board{flex:1;height:auto;border-radius:10px}
+body.imersivo .missao{padding:6px 10px;gap:4px 12px;grid-template-columns:auto 1fr 1fr}
+body.imersivo .missao .nome{font-size:15px}
+body.imersivo .missao .nome span{display:none}
+body.imersivo #dica{display:none}
+body.imersivo .tools{flex-wrap:nowrap;overflow-x:auto;padding-bottom:2px}
+body.imersivo .tools .seg{flex-wrap:nowrap;flex:none}
+@media (pointer:coarse){
+  .seg button{min-height:44px}
+  .tecla{display:none}
+}
