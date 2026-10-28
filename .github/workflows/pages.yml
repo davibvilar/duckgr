@@ -1,0 +1,56 @@
+# Roda os testes em todo pull request e em todo push.
+# Quando algo entra na main, publica o jogo no GitHub Pages.
+name: Testes e publicação
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# O projeto mora na pasta duckgr/ do repositório.
+defaults:
+  run:
+    working-directory: duckgr
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+
+  publicar:
+    needs: testes
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Montar o site
+        run: |
+          mkdir -p _site
+          cp -r web/. _site/
+          mkdir -p _site/prototipos
+          cp docs/prototipos/*.html _site/prototipos/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: duckgr/_site
+      - id: deploy
+        uses: actions/deploy-pages@v4

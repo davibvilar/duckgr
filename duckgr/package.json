@@ -1,0 +1,10 @@
+{
+  "name": "duckgr",
+  "private": true,
+  "type": "module",
+  "description": "DuckGR: plataforma de mundos em grade. Protótipo web jogável.",
+  "scripts": {
+    "test": "node --test \"testes/*.test.js\"",
+    "servir": "python3 -m http.server 8000 --directory web"
+  }
+}

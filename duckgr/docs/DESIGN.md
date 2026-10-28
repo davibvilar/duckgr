@@ -185,6 +185,47 @@ O Factorio é aberto; aqui cada sessão tem uma missão com metas verificáveis 
 
 Missões são dados: objetivo, tempo, recursos iniciais, restrições e eventos programados. O nome do jogo fica em aberto.
 
+### Primeira versão jogável: Terra Viva, era 1
+
+O primeiro pedaço jogável (pasta `web/`) cobre só a era do carvão e do vapor, para um jogador. A ideia é crescer aos pedaços: cada pedaço novo de jogo entra como dado no pacote, e só quando um dado não basta é que o núcleo ganha uma peça nova.
+
+| Peça do modelo | O que já existe na Terra Viva |
+| --- | --- |
+| Substrato | Solo, água funda (bloqueia o pedestre) e água rasa nos vaus, por onde se atravessa o rio |
+| Depósito | Ferro, cobre, carvão e pedra, com quantidade finita |
+| Cobertura | Grama, muda, árvore jovem, árvore adulta e toco; mudas crescem e crescem mais rápido ao lado da água |
+| Ocupante (elementos) | Mineradora a carvão, fornalha de pedra, baú e viveiro, todos 1×1 |
+| Componentes | Energia (combustível), extração, processo (receitas), entrega ao vizinho, emissão de campo, inventário |
+| Campo | Poluição por trecho de 8×8: máquinas emitem, coberturas absorvem, acima de um limiar se espalha; poluída demais, impede o crescimento e faz as árvores regredirem |
+| Agente: o jogador | Um pato com posição fora da célula, velocidade a pé (4 células por segundo, menor na floresta e na água rasa) e alcance de uma célula em volta. Recebe ordens "vá até perto daqui e faça isto", que formam uma fila; o caminho é calculado sobre a máscara de passagem |
+| Logística | O jogador carrega; a única automação é a entrega direta entre máquinas vizinhas (mineradora → fornalha → baú) |
+| Pesquisa e eras | Pacotes de ciência pesquisam o viveiro e depois a eletricidade, que abre a era 2 (ainda vazia) |
+| Missão | Primeira fundição: produzir 50 placas de ferro sem a floresta cair abaixo de 50% da inicial |
+
+Uma melhoria em relação ao Factorio: lá o jogador anda com o teclado e só age no que está perto. Aqui ele também só age de perto, mas pode receber ordens à distância ("vá até ali e minere cinco vezes"), e várias ordens em fila. Cada ação aparece no próprio tabuleiro, ao passar o mouse na célula, com uma tecla de atalho. A velocidade é do jogador e não do mundo, para que um veículo, no futuro, seja só um modificador dela.
+
+Ficaram de fora de propósito, para os próximos pedaços: fauna, água em rede, estradas e carroças, horta e fazendas, saúde do solo, pegadas maiores que 1×1, insersores e esteiras. A tela de montagem já deixa escolher semente, tamanho do mapa, floresta, recursos e metas, e a partida é salva como lista de comandos e refeita no carregamento, o que testa o determinismo a cada vez que alguém abre o jogo.
+
+### Como a partida é salva
+
+Como o mundo é determinístico, há duas formas de guardar uma partida: o **estado atual** (a foto do mundo agora) ou o **registro de comandos** (o filme, refeito do zero ao abrir). Medimos as duas com um jogador-robô que dá uma ordem a cada três segundos:
+
+| Partida | Comandos | Registro (JSON / gzip) | Estado atual (JSON / gzip) | Refazer tudo do zero |
+| --- | --- | --- | --- | --- |
+| 30 min, mapa 40×24 | 525 | 42 KB / 3,7 KB | 46 KB / 3,4 KB | 0,2 s |
+| 2 h, mapa 56×32 | 2.177 | 178 KB / 15 KB | 92 KB / 6 KB | 1,9 s |
+
+O registro cresce com o tempo de jogo, uns 7 KB por hora depois de comprimido, e não depende do tamanho do mapa. O estado cresce com o mapa e não depende do tempo. Os dois são pequenos. O que pesa é o **tempo para abrir**: refazer horas de jogo leva segundos, e num mapa grande leva mais.
+
+Por isso o save tem as duas coisas, comprimidas com gzip:
+
+- um **checkpoint**, o estado inteiro do mundo, tirado a cada 5 minutos de jogo;
+- o **histórico** de todos os comandos com autor e tick. Ao abrir, o jogo carrega o checkpoint e refaz só os comandos posteriores, no máximo 5 minutos de jogo. O histórico inteiro continua no arquivo para rever a partida, conferir o hash e, no futuro, para a facilitação e o multiplayer.
+
+O arquivo guarda também o hash do mundo no momento do save. Ao abrir, o mundo refeito precisa dar o mesmo hash, o que testa o determinismo a cada carregamento. Uma partida de duas horas fica em torno de 20 KB. Ela cabe no navegador, num arquivo `.duckgr` ou num código de texto que dá para colar numa mensagem.
+
+Para mapas de missão de 256×256, o estado em JSON passaria de 3 MB antes da compressão. Quando o núcleo for para Rust, o checkpoint vira binário: as camadas em vetores por chunk, que é o formato da memória, com RLE e gzip. Uma estimativa grosseira fica na casa de 100 a 200 KB. O histórico não muda.
+
 ## Indo além do Factorio: lições da história e da ficção
 
 O Factorio começa numa fábrica e só tem uma relação com o mundo: extrair e poluir. A história humana e a boa ficção científica mostram um percurso muito mais rico — fogo, agricultura, cidades, crises e reconstruções — e cada etapa sugere uma mecânica. Esta seção é um banco de ideias candidatas; as que forem aprovadas sobem para a Proposta temática.
