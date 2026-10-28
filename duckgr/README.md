@@ -8,7 +8,32 @@ O mascote é um pato que vai na frente mostrando o caminho.
 
 ## Estado
 
-Fase de fundação. Ainda não há código jogável aqui. Um rascunho das regras do Paz ou Guerra está em [`docs/prototipos/paz-ou-guerra.html`](docs/prototipos/paz-ou-guerra.html): é só abrir o arquivo no navegador.
+Primeira versão jogável: **Terra Viva** (nome provisório), a primeira era do mundo industrial e ecológico inspirado no Factorio, só para um jogador. Corte árvores, minere, monte mineradoras e fornalhas, e cumpra a missão sem deixar a floresta cair. A cada merge na `main`, o jogo é publicado no GitHub Pages.
+
+O rascunho das regras do Paz ou Guerra continua em [`docs/prototipos/paz-ou-guerra.html`](docs/prototipos/paz-ou-guerra.html).
+
+## Como rodar
+
+Não precisa instalar nada além do Node 22 (só para os testes).
+
+```sh
+npm test          # testes do núcleo e das regras da Terra Viva
+npm run servir    # abre um servidor em http://localhost:8000
+```
+
+## Como o código está dividido
+
+- `web/plataforma/`: a plataforma. Não sabe que existe árvore, fornalha ou poluição.
+  - `nucleo.js`: células em camadas, elementos feitos de componentes, campos por chunk, comandos, ticks e hash do estado.
+  - `gerador.js`: gera o mapa a partir das regras do pacote.
+  - `desenho.js`: desenha o mundo num canvas, com a aparência que o pacote define.
+  - `app.js`: telas (jogo, menu, configurações, montagem do mundo), laço de ticks e salvamento.
+- `web/jogos/`: os mundos. Cada um é um pacote de dados.
+  - `terra-viva/pacote.js`: recursos, coberturas, receitas, máquinas, campos, eras, tecnologias e missão.
+  - `catalogo.js`: a lista de mundos oferecidos pela plataforma.
+- `testes/`: testes que reproduzem cada regra a partir de uma sequência de comandos.
+
+Este núcleo em JavaScript é um degrau: ele fixa o modelo (camadas, componentes, comandos, determinismo) que depois vai para o `duckgr-sim` em Rust, rodando em WebAssembly no lugar dele.
 
 ## Documentos
 

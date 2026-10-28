@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>DuckGR · Terra Viva</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@500;700;800&display=swap">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo"><span class="a" id="nomeMundo">Terra Viva</span><small>DuckGR</small></div>
+    <div class="top-r" id="topo"></div>
+  </header>
+
+  <!-- TELA: JOGO -->
+  <main id="telaJogo" class="wrap">
+    <section class="card missao" id="missao"></section>
+    <div class="tools">
+      <div class="seg" id="ferramentas"></div>
+      <div class="seg" id="construcoes"></div>
+      <div class="seg"><button id="verCampo" aria-pressed="false">Ver poluição</button></div>
+    </div>
+    <div class="hint" id="dica"></div>
+    <div class="board" id="tabuleiro"><canvas id="cv"></canvas></div>
+    <div class="cols">
+      <div class="wrap" style="gap:12px;margin:0;max-width:none">
+        <section class="card"><div class="linha"><h3>Inventário</h3><span class="hint">Toque num item para segurar</span></div><div class="chips" id="inventario"></div></section>
+        <section class="card"><h3>Fabricar à mão</h3><div id="fabricar" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
+      </div>
+      <div class="wrap" style="gap:12px;margin:0;max-width:none">
+        <section class="card"><h3 id="celTit">Camadas da célula</h3><dl class="camadas" id="celula"></dl></section>
+        <section class="card"><h3>Pesquisa</h3><div id="pesquisa" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
+      </div>
+    </div>
+    <div class="eras" id="eras"></div>
+    <section class="card log"><h3>Registro do mundo</h3><ol id="registro"></ol></section>
+    <div class="foot" id="rodape"></div>
+  </main>
+
+  <!-- TELA: MENU -->
+  <main id="telaMenu" class="wrap" hidden>
+    <h1 class="tela-tit">Menu</h1>
+    <div class="menu-grid">
+      <button class="opcao prim" data-ir="jogo"><h2>Continuar</h2><p>Voltar para o mundo em andamento.</p></button>
+      <button class="opcao" id="novoPadrao"><h2>Novo jogo</h2><p>Começa de novo no mundo padrão, sem perguntas.</p></button>
+      <button class="opcao" data-ir="montar"><h2>Montar mundo</h2><p>Escolha o pacote, o tamanho do mapa, a floresta, os recursos e as metas.</p></button>
+      <button class="opcao" data-ir="configurar"><h2>Configurações</h2><p>Velocidade, zoom e outras preferências deste aparelho.</p></button>
+      <button class="opcao" id="comoJogar"><h2>Como jogar</h2><p>Os primeiros passos da primeira era.</p></button>
+    </div>
+    <p class="foot">DuckGR é uma plataforma de mundos em grade. Cada mundo é um pacote de dados; esta versão traz o primeiro, a Terra Viva, só para um jogador.</p>
+  </main>
+
+  <!-- TELA: CONFIGURAÇÕES -->
+  <main id="telaConfigurar" class="wrap" hidden>
+    <h1 class="tela-tit">Configurações</h1>
+    <section class="card form" id="formPrefs"></section>
+    <section class="card">
+      <h3>Partida salva</h3>
+      <p class="muted small" style="margin:0">A partida é salva neste navegador como uma lista de comandos. Ao abrir de novo, o mundo é refeito comando a comando.</p>
+      <div class="acoes"><button class="btn perigo" id="apagarSave">Apagar partida salva</button></div>
+    </section>
+    <div class="acoes"><button class="btn prim" data-ir="jogo">Voltar ao jogo</button><button class="btn" data-ir="menu">Menu</button></div>
+  </main>
+
+  <!-- TELA: MONTAR MUNDO -->
+  <main id="telaMontar" class="wrap" hidden>
+    <h1 class="tela-tit">Montar mundo</h1>
+    <section class="card form" id="formMundo"></section>
+    <div class="previa" id="previa"><canvas id="cvPrevia"></canvas></div>
+    <p class="hint" id="previaInfo"></p>
+    <div class="acoes"><button class="btn prim" id="comecarMontado">Começar este mundo</button><button class="btn" data-ir="menu">Voltar</button></div>
+  </main>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+<div class="alert" id="alerta" hidden><div class="box" id="alertaBox"><h2 id="alertaTit"></h2><div id="alertaTxt"></div><button class="btn prim" id="alertaBtn">Entendi</button></div></div>
+
+<script type="module" src="plataforma/app.js"></script>
+</body>
+</html>

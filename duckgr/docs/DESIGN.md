@@ -185,6 +185,24 @@ O Factorio é aberto; aqui cada sessão tem uma missão com metas verificáveis 
 
 Missões são dados: objetivo, tempo, recursos iniciais, restrições e eventos programados. O nome do jogo fica em aberto.
 
+### Primeira versão jogável: Terra Viva, era 1
+
+O primeiro pedaço jogável (pasta `web/`) cobre só a era do carvão e do vapor, para um jogador. A ideia é crescer aos pedaços: cada pedaço novo de jogo entra como dado no pacote, e só quando um dado não basta é que o núcleo ganha uma peça nova.
+
+| Peça do modelo | O que já existe na Terra Viva |
+| --- | --- |
+| Substrato | Solo e água (rio gerado pela semente) |
+| Depósito | Ferro, cobre, carvão e pedra, com quantidade finita |
+| Cobertura | Grama, muda, árvore jovem, árvore adulta e toco; mudas crescem e crescem mais rápido ao lado da água |
+| Ocupante (elementos) | Mineradora a carvão, fornalha de pedra, baú e viveiro, todos 1×1 |
+| Componentes | Energia (combustível), extração, processo (receitas), entrega ao vizinho, emissão de campo, inventário |
+| Campo | Poluição por trecho de 8×8: máquinas emitem, coberturas absorvem, acima de um limiar se espalha; poluída demais, impede o crescimento e faz as árvores regredirem |
+| Logística | O jogador carrega; a única automação é a entrega direta entre máquinas vizinhas (mineradora → fornalha → baú) |
+| Pesquisa e eras | Pacotes de ciência pesquisam o viveiro e depois a eletricidade, que abre a era 2 (ainda vazia) |
+| Missão | Primeira fundição: produzir 50 placas de ferro sem a floresta cair abaixo de 50% da inicial |
+
+Ficaram de fora de propósito, para os próximos pedaços: fauna, água em rede, estradas e carroças, horta e fazendas, saúde do solo, pegadas maiores que 1×1, insersores e esteiras. A tela de montagem já deixa escolher semente, tamanho do mapa, floresta, recursos e metas, e a partida é salva como lista de comandos e refeita no carregamento, o que testa o determinismo a cada vez que alguém abre o jogo.
+
 ## Indo além do Factorio: lições da história e da ficção
 
 O Factorio começa numa fábrica e só tem uma relação com o mundo: extrair e poluir. A história humana e a boa ficção científica mostram um percurso muito mais rico — fogo, agricultura, cidades, crises e reconstruções — e cada etapa sugere uma mecânica. Esta seção é um banco de ideias candidatas; as que forem aprovadas sobem para a Proposta temática.

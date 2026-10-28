@@ -30,6 +30,8 @@ Workspace Rust (nomes provisórios, prefixo `duckgr-`):
 
 Não comece pelo que é "depois". Ordem: `duckgr-sim` com testes, depois `duckgr-data`, depois wasm + cliente web.
 
+**Hoje:** existe um protótipo jogável em JavaScript puro em `web/` (núcleo em `web/plataforma/`, mundos em `web/jogos/`), com testes em `testes/` (`npm test`) e publicação no GitHub Pages a cada merge na `main`. Ele segue os mesmos princípios acima (comandos, ticks, inteiros, conteúdo só em pacotes) e serve para validar o modelo e o jogo enquanto o núcleo em Rust não existe. Quando o `duckgr-wasm` estiver pronto, ele substitui `web/plataforma/nucleo.js` mantendo a interface.
+
 ## Como trabalhar
 
 - Toda mudança entra por pull request, com descrição curta do quê e do porquê. Nada direto na `main`.
