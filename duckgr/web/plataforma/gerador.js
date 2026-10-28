@@ -25,7 +25,9 @@ export function gerarMapa(C, cfg) {
     let x = Math.floor(L * rio.posicao);
     for (let y = 0; y < A; y++) {
       x = Math.max(1, Math.min(L - rio.largura - 1, x + entre(-1, 1)));
-      for (let k = 0; k < rio.largura; k++) { sub[i(x + k, y)] = rio.substrato; cov[i(x + k, y)] = null; }
+      // vaus: trechos rasos, distribuídos ao longo do rio, por onde dá para atravessar
+      const vau = rio.vau && Array.from({ length: rio.vaus || 0 }, (_, k) => Math.floor((A * (k + 1)) / ((rio.vaus || 0) + 1))).includes(y);
+      for (let k = 0; k < rio.largura; k++) { sub[i(x + k, y)] = vau ? rio.vau : rio.substrato; cov[i(x + k, y)] = null; }
     }
   }
   const agua = (x, y) => C.substratos[sub[i(x, y)]].plantar === false && !C.substratos[sub[i(x, y)]].construir;

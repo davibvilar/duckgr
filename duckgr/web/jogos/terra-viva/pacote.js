@@ -8,7 +8,7 @@
 export default {
   id: "terra-viva",
   nome: "Terra Viva",
-  versao: "0.1.0",
+  versao: "0.2.0",
   descricao: "Primeira era: carvão e vapor. Produza sem devastar a floresta.",
 
   mapa: {
@@ -21,7 +21,7 @@ export default {
     geracao: {
       substrato: "solo",
       cobertura: "grama",
-      rios: [{ substrato: "agua", posicao: 0.2, largura: 2 }],
+      rios: [{ substrato: "agua", vau: "vau", vaus: 2, posicao: 0.2, largura: 2 }],
       manchas: [
         // floresta: manchas de árvores adultas e jovens
         { camada: "cobertura", tipos: { adulta: 3, jovem: 1 }, porArea: 1 / 55, raio: [2, 4], preenche: 75, escalaPor: "floresta" },
@@ -37,9 +37,20 @@ export default {
   // valores usados quando o jogador não muda nada (o jogo padrão)
   padrao: { semente: 2026, largura: 40, altura: 24, floresta: 1, recursosIniciais: 1 },
 
+  // O jogador anda a pé por enquanto. Veículos, no futuro, mudam a velocidade.
+  jogador: {
+    nome: "Pato",
+    passagem: "pedestre",       // classe de passagem usada pelas camadas
+    celulasPorSegundo: 4,       // a pé
+    alcance: 1,                 // age nas 8 células em volta
+    minerarVezes: 5,            // quantas vezes "minerar" repete por ordem
+    duracoes: { colher: 1, minerar: 0.5, plantar: 0.4, construir: 0.5, desmontar: 0.5, recolher: 0.2, abastecer: 0.2, fornecer: 0.2 },
+  },
+
   substratos: {
     solo: { nome: "Solo", construir: true, plantar: true, aparencia: { cor: "#7a6446" } },
-    agua: { nome: "Água", construir: false, plantar: false, marcas: ["agua"], aparencia: { cor: "#2f6f9e", forma: "agua" } },
+    vau: { nome: "Água rasa", construir: false, plantar: false, marcas: ["agua"], passagem: { pedestre: 3 }, aparencia: { cor: "#4f8fb8", forma: "agua" } },
+    agua: { nome: "Água", construir: false, plantar: false, marcas: ["agua"], passagem: { pedestre: "bloqueia" }, aparencia: { cor: "#2f6f9e", forma: "agua" } },
   },
 
   depositos: {
@@ -57,18 +68,18 @@ export default {
       aparencia: { forma: "broto", cor: "#8fd16a" },
     },
     jovem: {
-      nome: "Árvore jovem", marcas: ["floresta"], absorve: { poluicao: 25 }, regride: "muda",
+      nome: "Árvore jovem", marcas: ["floresta"], passagem: { pedestre: 2 }, absorve: { poluicao: 25 }, regride: "muda",
       cresce: { para: "adulta", segundos: 60, bonusVizinho: "agua" },
       aparencia: { forma: "arvore", tamanho: 0.3, cor: "#4c9a3e" },
     },
     adulta: {
-      nome: "Árvore adulta", marcas: ["floresta"], absorve: { poluicao: 50 }, regride: "jovem",
-      colheita: { da: { madeira: 4, muda: 1 }, vira: "toco" },
+      nome: "Árvore adulta", marcas: ["floresta"], passagem: { pedestre: 2 }, absorve: { poluicao: 50 }, regride: "jovem",
+      colheita: { verbo: "Cortar", da: { madeira: 4, muda: 1 }, vira: "toco" },
       aparencia: { forma: "arvore", tamanho: 0.46, cor: "#2f6e2f" },
     },
     toco: {
       nome: "Toco", substituivel: true,
-      colheita: { da: { madeira: 1 }, vira: null },
+      colheita: { verbo: "Arrancar", da: { madeira: 1 }, vira: null },
       cresce: { para: "grama", segundos: 90 },
       aparencia: { forma: "toco", cor: "#7b5532" },
     },

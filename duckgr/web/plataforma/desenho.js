@@ -2,6 +2,7 @@
 // do pacote (cor, forma, símbolo). O núcleo não sabe que este arquivo existe.
 
 import { idx, total } from "./nucleo.js";
+import { custoPassagem } from "./jogador.js";
 
 export function ruido(x, y) {
   const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;
@@ -52,6 +53,8 @@ export function desenharMundo(ctx, S, C, op) {
       }
     }
   }
+
+  desenharJogador(ctx, S, C, op);
 
   if (op.hover) {
     const { x, y } = op.hover;
@@ -124,4 +127,59 @@ function elemento(ctx, C, e, px, py, cs, t) {
   }
   const s = total(e.sai);
   if (s) { ctx.fillStyle = "#f2c14e"; ctx.fillRect(px + 2, py + cs - 4, Math.min(cs - 4, (cs - 4) * s / 20), 2); }
+}
+
+// Posição do jogador na tela, já com a fração do passo em andamento (para animar).
+export function posJogador(S, C) {
+  const J = S.jog, prox = J.cam[0];
+  if (prox === undefined || !J.passo) return { x: J.x, y: J.y, dx: 0 };
+  const nx = prox % S.L, ny = Math.floor(prox / S.L);
+  const f = Math.min(1, J.passo / (C.jogador.ticksPorCelula * Math.max(1, custoPassagem(S, C, nx, ny))));
+  return { x: J.x + (nx - J.x) * f, y: J.y + (ny - J.y) * f, dx: nx - J.x };
+}
+
+let olhaEsquerda = false;
+function desenharJogador(ctx, S, C, op) {
+  const cs = op.cs, J = S.jog, R = C.jogador.alcance;
+  // alcance
+  ctx.strokeStyle = "rgba(242,193,78,.35)"; ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]);
+  ctx.strokeRect((J.x - R) * cs + 0.5, (J.y - R) * cs + 0.5, (2 * R + 1) * cs - 1, (2 * R + 1) * cs - 1);
+  ctx.setLineDash([]);
+  // caminho
+  const p = posJogador(S, C);
+  if (J.cam.length) {
+    ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 2; ctx.setLineDash([2, 5]);
+    ctx.beginPath(); ctx.moveTo((p.x + 0.5) * cs, (p.y + 0.5) * cs);
+    for (const i of J.cam) ctx.lineTo((i % S.L + 0.5) * cs, (Math.floor(i / S.L) + 0.5) * cs);
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  // tarefas na fila: um selo numerado em cada alvo
+  J.fila.forEach((o, k) => {
+    ctx.strokeStyle = k === 0 ? "#f2c14e" : "rgba(242,193,78,.6)"; ctx.lineWidth = 2;
+    ctx.strokeRect(o.x * cs + 2, o.y * cs + 2, cs - 4, cs - 4);
+    ctx.fillStyle = "#f2c14e"; ctx.beginPath(); ctx.arc(o.x * cs + cs - 3, o.y * cs + 3, Math.max(6, cs * 0.24), 0, 7); ctx.fill();
+    ctx.fillStyle = "#13202e"; ctx.font = `800 ${Math.max(9, cs * 0.34)}px Nunito, system-ui, sans-serif`;
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(String(k + 1), o.x * cs + cs - 3, o.y * cs + 3.5);
+    ctx.textAlign = "start"; ctx.textBaseline = "alphabetic";
+  });
+  // barra de progresso da ação em andamento
+  const o = J.fila[0];
+  if (o && J.tarefa) {
+    const f = J.tarefa / (C.jogador.duracoes[o.acao] || 1);
+    ctx.fillStyle = "rgba(0,0,0,.5)"; ctx.fillRect(o.x * cs + 3, o.y * cs + cs - 6, cs - 6, 4);
+    ctx.fillStyle = "#f2c14e"; ctx.fillRect(o.x * cs + 3, o.y * cs + cs - 6, (cs - 6) * f, 4);
+  }
+  // o pato
+  if (p.dx) olhaEsquerda = p.dx < 0;
+  const px = (p.x + 0.5) * cs, py = (p.y + 0.5) * cs, s = cs * 0.42, d = olhaEsquerda ? -1 : 1;
+  const bob = J.cam.length ? Math.sin(op.t / 90) * cs * 0.04 : 0;
+  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(px, py + s * 0.85, s * 0.8, s * 0.25, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#f6d34a"; ctx.strokeStyle = "#7a5a10"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(px - d * s * 0.1, py + s * 0.25 + bob, s * 0.75, s * 0.52, 0, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(px + d * s * 0.38, py - s * 0.35 + bob, s * 0.42, 0, 7); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = "#f08a24"; ctx.beginPath();
+  ctx.moveTo(px + d * s * 0.7, py - s * 0.38 + bob); ctx.lineTo(px + d * s * 1.15, py - s * 0.24 + bob); ctx.lineTo(px + d * s * 0.7, py - s * 0.14 + bob); ctx.fill();
+  ctx.fillStyle = "#13202e"; ctx.beginPath(); ctx.arc(px + d * s * 0.48, py - s * 0.45 + bob, Math.max(1.2, s * 0.08), 0, 7); ctx.fill();
+  ctx.fillStyle = "#e9bf2f"; ctx.beginPath(); ctx.ellipse(px - d * s * 0.25, py + s * 0.2 + bob, s * 0.35, s * 0.2, d * -0.4, 0, 7); ctx.fill();
 }

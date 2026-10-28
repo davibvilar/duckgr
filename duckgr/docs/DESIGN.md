@@ -191,15 +191,18 @@ O primeiro pedaço jogável (pasta `web/`) cobre só a era do carvão e do vapor
 
 | Peça do modelo | O que já existe na Terra Viva |
 | --- | --- |
-| Substrato | Solo e água (rio gerado pela semente) |
+| Substrato | Solo, água funda (bloqueia o pedestre) e água rasa nos vaus, por onde se atravessa o rio |
 | Depósito | Ferro, cobre, carvão e pedra, com quantidade finita |
 | Cobertura | Grama, muda, árvore jovem, árvore adulta e toco; mudas crescem e crescem mais rápido ao lado da água |
 | Ocupante (elementos) | Mineradora a carvão, fornalha de pedra, baú e viveiro, todos 1×1 |
 | Componentes | Energia (combustível), extração, processo (receitas), entrega ao vizinho, emissão de campo, inventário |
 | Campo | Poluição por trecho de 8×8: máquinas emitem, coberturas absorvem, acima de um limiar se espalha; poluída demais, impede o crescimento e faz as árvores regredirem |
+| Agente: o jogador | Um pato com posição fora da célula, velocidade a pé (4 células por segundo, menor na floresta e na água rasa) e alcance de uma célula em volta. Recebe ordens "vá até perto daqui e faça isto", que formam uma fila; o caminho é calculado sobre a máscara de passagem |
 | Logística | O jogador carrega; a única automação é a entrega direta entre máquinas vizinhas (mineradora → fornalha → baú) |
 | Pesquisa e eras | Pacotes de ciência pesquisam o viveiro e depois a eletricidade, que abre a era 2 (ainda vazia) |
 | Missão | Primeira fundição: produzir 50 placas de ferro sem a floresta cair abaixo de 50% da inicial |
+
+Uma melhoria em relação ao Factorio: lá o jogador anda com o teclado e só age no que está perto. Aqui ele também só age de perto, mas pode receber ordens à distância ("vá até ali e minere cinco vezes"), e várias ordens em fila. Cada ação aparece no próprio tabuleiro, ao passar o mouse na célula, com uma tecla de atalho. A velocidade é do jogador e não do mundo, para que um veículo, no futuro, seja só um modificador dela.
 
 Ficaram de fora de propósito, para os próximos pedaços: fauna, água em rede, estradas e carroças, horta e fazendas, saúde do solo, pegadas maiores que 1×1, insersores e esteiras. A tela de montagem já deixa escolher semente, tamanho do mapa, floresta, recursos e metas, e a partida é salva como lista de comandos e refeita no carregamento, o que testa o determinismo a cada vez que alguém abre o jogo.
 

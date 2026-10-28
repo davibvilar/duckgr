@@ -19,20 +19,23 @@
   <main id="telaJogo" class="wrap">
     <section class="card missao" id="missao"></section>
     <div class="tools">
-      <div class="seg" id="ferramentas"></div>
       <div class="seg" id="construcoes"></div>
-      <div class="seg"><button id="verCampo" aria-pressed="false">Ver poluição</button></div>
+      <div class="seg">
+        <button id="abrirInv" title="Inventário (E)">🎒 Inventário <span class="tecla">E</span></button>
+        <button id="verCampo" aria-pressed="false" title="Ver poluição (V)">Ver poluição <span class="tecla">V</span></button>
+      </div>
+      <div id="fila" class="fila"></div>
     </div>
     <div class="hint" id="dica"></div>
-    <div class="board" id="tabuleiro"><canvas id="cv"></canvas></div>
+    <div class="board" id="tabuleiro"><canvas id="cv"></canvas><div class="menu-cel" id="menuCel" hidden></div></div>
     <div class="cols">
       <div class="wrap" style="gap:12px;margin:0;max-width:none">
-        <section class="card"><div class="linha"><h3>Inventário</h3><span class="hint">Toque num item para segurar</span></div><div class="chips" id="inventario"></div></section>
-        <section class="card"><h3>Fabricar à mão</h3><div id="fabricar" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
+        <section class="card"><div class="linha"><h3>Inventário</h3><button class="linkbtn" id="abrirInv2">Abrir (E)</button></div><div class="chips" id="inventario"></div><div class="hint" id="infoJogador"></div></section>
+        <section class="card"><h3>Pesquisa</h3><div id="pesquisa" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
       </div>
       <div class="wrap" style="gap:12px;margin:0;max-width:none">
         <section class="card"><h3 id="celTit">Camadas da célula</h3><dl class="camadas" id="celula"></dl></section>
-        <section class="card"><h3>Pesquisa</h3><div id="pesquisa" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
+        <section class="card"><h3>Atalhos</h3><div class="atalhos" id="atalhos"></div></section>
       </div>
     </div>
     <div class="eras" id="eras"></div>
@@ -75,6 +78,15 @@
   </main>
 </div>
 
+<div class="alert" id="telaInv" hidden>
+  <div class="box inv-box" role="dialog" aria-labelledby="invTit">
+    <div class="linha"><h2 id="invTit">Inventário</h2><button class="btn" id="fecharInv">Fechar <span class="tecla">E</span></button></div>
+    <div class="slots" id="slots"></div>
+    <h3>Fabricar à mão</h3>
+    <div id="fabricar" class="wrap" style="gap:6px;margin:0;max-width:none"></div>
+    <p class="hint" id="invJogador"></p>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 <div class="alert" id="alerta" hidden><div class="box" id="alertaBox"><h2 id="alertaTit"></h2><div id="alertaTxt"></div><button class="btn prim" id="alertaBtn">Entendi</button></div></div>
 

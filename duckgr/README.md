@@ -8,7 +8,9 @@ O mascote é um pato que vai na frente mostrando o caminho.
 
 ## Estado
 
-Primeira versão jogável: **Terra Viva** (nome provisório), a primeira era do mundo industrial e ecológico inspirado no Factorio, só para um jogador. Corte árvores, minere, monte mineradoras e fornalhas, e cumpra a missão sem deixar a floresta cair. A cada merge na `main`, o jogo é publicado no GitHub Pages.
+Versão jogável: **Terra Viva** (nome provisório), a primeira era do mundo industrial e ecológico inspirado no Factorio, só para um jogador. Você é um pato que anda pelo mapa: corte árvores, minere, monte mineradoras e fornalhas, e cumpra a missão sem deixar a floresta cair.
+
+Controles: passe o mouse numa célula para ver as ações possíveis, cada uma com uma tecla (C corta, M minera, R recolhe, A abastece, F fornece, P planta, D desmonta, I vai até lá, 1–9 constrói). Clicar faz a ação destacada; com Shift, a ação entra na fila. E abre o inventário, Esc para as tarefas, Espaço pausa. No celular, toque na célula para abrir o menu de ações. A cada merge na `main`, o jogo é publicado no GitHub Pages.
 
 O rascunho das regras do Paz ou Guerra continua em [`docs/prototipos/paz-ou-guerra.html`](docs/prototipos/paz-ou-guerra.html).
 
@@ -25,6 +27,7 @@ npm run servir    # abre um servidor em http://localhost:8000
 
 - `web/plataforma/`: a plataforma. Não sabe que existe árvore, fornalha ou poluição.
   - `nucleo.js`: células em camadas, elementos feitos de componentes, campos por chunk, comandos, ticks e hash do estado.
+  - `jogador.js`: o jogador como agente (posição, velocidade, alcance), caminho até o alvo, fila de ordens e as ações genéricas (colher, minerar, plantar, construir, recolher, abastecer, fornecer, desmontar).
   - `gerador.js`: gera o mapa a partir das regras do pacote.
   - `desenho.js`: desenha o mundo num canvas, com a aparência que o pacote define.
   - `app.js`: telas (jogo, menu, configurações, montagem do mundo), laço de ticks e salvamento.

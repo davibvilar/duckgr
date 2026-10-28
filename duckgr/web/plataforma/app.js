@@ -4,6 +4,7 @@
 
 import * as N from "./nucleo.js";
 import { desenharMundo } from "./desenho.js";
+import { acoesPossiveis, velocidadeCelulasPorSegundo } from "./jogador.js";
 import { PACOTES, PACOTE_PADRAO, EM_BREVE } from "../jogos/catalogo.js";
 
 const $ = s => document.querySelector(s);
@@ -21,7 +22,8 @@ const pacote = id => (compilados[id] ||= N.compilar(PACOTES.find(p => p.id === i
 
 // estado da partida e da interface
 let P = null, C = null, S = null;
-let ferramenta = "mao", construindo = null, segurando = null, verCampo = false;
+let construindo = null, verCampo = false, invAberto = false, menuFixo = null;
+const flutuantes = []; // textos "+1 madeira" que sobem acima do pato
 let hover = null, celSel = null, pausado = false, tela = "jogo", hashVisto = "";
 
 // ---------- partida
@@ -29,7 +31,7 @@ function iniciar(partida, ateTick = 0) {
   P = { pacote: partida.pacote, cfg: partida.cfg || {}, cmds: partida.cmds || [] };
   C = pacote(P.pacote);
   S = ateTick ? N.rodar(C, P.cfg, P.cmds, ateTick) : N.novoEstado(C, P.cfg);
-  ferramenta = "mao"; construindo = null; segurando = null; celSel = null; pausado = false;
+  construindo = null; celSel = null; menuFixo = null; pausado = false;
   $("#nomeMundo").textContent = C.nome;
   document.title = `DuckGR · ${C.nome}`;
   dimensionar();
@@ -37,7 +39,7 @@ function iniciar(partida, ateTick = 0) {
   salvar();
 }
 function novoPadrao() { iniciar({ pacote: PACOTE_PADRAO, cfg: {}, cmds: [] }); }
-function salvar() { gravar(CHAVE_PARTIDA, { ...P, tick: S.tick }); }
+function salvar() { gravar(CHAVE_PARTIDA, { ...P, versao: C.versao, tick: S.tick }); }
 
 function comando(cmd, silencioso = false) {
   cmd.t = S.tick; cmd.autor = "jogador";
@@ -70,7 +72,12 @@ function quadro(agora) {
 
 function tratarEventos() {
   for (const ev of S.eventos.splice(0)) {
-    if (ev.tipo === "era") {
+    if (ev.tipo === "aviso") aviso(ev.msg);
+    else if (ev.tipo === "ganho") {
+      const partes = [...Object.entries(ev.ganho).map(([it, n]) => [`+${n} ${nItem(it).toLowerCase()}`, "#f2c14e"]),
+        ...Object.entries(ev.perda).map(([it, n]) => [`−${n} ${nItem(it).toLowerCase()}`, "#a9b6c6"])];
+      partes.forEach(([txt, cor], k) => flutuantes.push({ x: ev.x, y: ev.y, txt, cor, t0: performance.now() + k * 180 }));
+    } else if (ev.tipo === "era") {
       const era = C.eras[ev.era - 1];
       alerta(`Era ${ev.era}: ${era.nome}`, `<p>Estamos entrando na era <b>${esc(era.nome)}</b>.</p><p>${esc(era.resumo)}</p><p>Nesta primeira versão do jogo, a era ${ev.era} ainda está sendo construída. Você pode continuar jogando e cuidando da floresta.</p>`, "Seguir", "ouro");
     } else if (ev.tipo === "missao" && ev.estado === "cumprida") {
@@ -100,43 +107,110 @@ window.addEventListener("resize", () => { dimensionar(); if (tela === "montar") 
 function desenhar(t) {
   desenharMundo(ctx, S, C, {
     cs, t, verCampo, hover,
-    fantasma: ferramenta === "construir" && hover && !S.occ[N.idx(S, hover.x, hover.y)] ? construindo : null,
-    corCursor: ferramenta === "desmontar" ? "#ff9d8f" : ferramenta === "plantar" ? "#8fd16a" : "#ffffff",
+    fantasma: construindo && hover && !S.occ[N.idx(S, hover.x, hover.y)] ? construindo : null,
+    corCursor: construindo ? "#8fd16a" : "#ffffff",
   });
+  // textos flutuantes de ganho
+  ctx.font = `800 ${Math.max(12, cs * 0.55)}px Nunito, system-ui, sans-serif`; ctx.textAlign = "center";
+  for (let k = flutuantes.length - 1; k >= 0; k--) {
+    const f = flutuantes[k], dt = t - f.t0;
+    if (dt > 1400) { flutuantes.splice(k, 1); continue; }
+    if (dt < 0) continue;
+    const a = 1 - dt / 1400;
+    ctx.fillStyle = `rgba(0,0,0,${0.6 * a})`; ctx.fillText(f.txt, (f.x + 0.5) * cs + 1, (f.y - 0.1) * cs - dt / 40 + 1);
+    ctx.globalAlpha = a; ctx.fillStyle = f.cor; ctx.fillText(f.txt, (f.x + 0.5) * cs, (f.y - 0.1) * cs - dt / 40); ctx.globalAlpha = 1;
+  }
+  ctx.textAlign = "start";
 }
 
 // ---------- entrada no tabuleiro
+// Mouse: passar por cima mostra as ações da célula; clicar faz a ação padrão;
+// teclas fazem a ação do atalho. Shift (ou o botão "+ fila") põe no fim da fila.
+// Toque: tocar abre o menu da célula, e tocar numa ação a executa.
+const TECLAS = { ir: "I", colher: "C", minerar: "M", plantar: "P", recolher: "R", abastecer: "A", fornecer: "F", desmontar: "D" };
+const PADRAO = ["recolher", "abastecer", "fornecer", "colher", "minerar", "ir"];
+const teclaDe = a => a.acao === "construir" ? String(construiveis().indexOf(a.elemento) + 1) : TECLAS[a.acao];
+const construiveis = () => Object.keys(C.elementos).filter(el => S.liberados.includes(el));
+function opcoes(c) {
+  const r = acoesPossiveis(S, C, c.x, c.y);
+  r.acoes.forEach(a => (a.tecla = teclaDe(a)));
+  r.padrao = PADRAO.map(ac => r.acoes.find(a => a.acao === ac)).find(Boolean) || null;
+  return r;
+}
+function ordenar(a, adicionar) {
+  if (!a) return;
+  const { x, y, acao, item, elemento, vezes } = a;
+  comando({ tipo: "ordem", x, y, acao, item, elemento, vezes, adicionar: !!adicionar });
+}
+
 function celulaDe(e) {
   const r = cv.getBoundingClientRect();
   const x = Math.floor(((e.clientX - r.left) / r.width) * S.L), y = Math.floor(((e.clientY - r.top) / r.height) * S.A);
   return x < 0 || y < 0 || x >= S.L || y >= S.A ? null : { x, y };
 }
-const plantavel = () => Object.keys(C.itens).find(it => C.itens[it].planta);
-function agir({ x, y }, arrastando) {
-  if (ferramenta === "mao") {
-    if (arrastando && S.occ[N.idx(S, x, y)]) return;
-    comando({ tipo: "usar", x, y, segurando }, arrastando);
-  } else if (ferramenta === "plantar") comando({ tipo: "plantar", x, y, item: plantavel() }, arrastando);
-  else if (ferramenta === "construir") comando({ tipo: "construir", x, y, elemento: construindo });
-  else if (ferramenta === "desmontar") comando({ tipo: "desmontar", x, y });
-}
-let apertado = false, ultimaCel = "";
 cv.addEventListener("pointerdown", e => {
   const c = celulaDe(e); if (!c) return;
-  apertado = true; ultimaCel = c.x + "," + c.y; celSel = c;
-  cv.setPointerCapture(e.pointerId);
-  agir(c, false);
+  celSel = c;
+  if (construindo) { ordenar({ ...c, acao: "construir", elemento: construindo }, e.shiftKey); return; }
+  if (e.pointerType === "mouse") { menuFixo = null; ordenar(opcoes(c).padrao, e.shiftKey); }
+  else { hover = null; menuFixo = c; renderMenuCel(); }
 });
 cv.addEventListener("pointermove", e => {
+  if (e.pointerType !== "mouse") return;
   const c = celulaDe(e);
-  hover = e.pointerType === "mouse" ? c : null;
-  if (apertado && c && (ferramenta === "mao" || ferramenta === "plantar") && ultimaCel !== c.x + "," + c.y) {
-    ultimaCel = c.x + "," + c.y; celSel = c; agir(c, true);
-  }
+  if (c && hover && c.x === hover.x && c.y === hover.y) return;
+  hover = c; menuFixo = null; renderMenuCel(); renderCelula();
 });
-cv.addEventListener("pointerup", () => { apertado = false; });
-cv.addEventListener("pointercancel", () => { apertado = false; });
-cv.addEventListener("pointerleave", () => { hover = null; });
+cv.addEventListener("pointerleave", e => {
+  if (e.relatedTarget && $("#menuCel").contains(e.relatedTarget)) return;
+  hover = null; renderMenuCel();
+});
+$("#menuCel").addEventListener("pointerleave", e => {
+  if (e.relatedTarget === cv) return;
+  hover = null; renderMenuCel();
+});
+
+document.addEventListener("keydown", e => {
+  if (tela !== "jogo" || e.target.closest("input,select,textarea") || e.ctrlKey || e.metaKey || e.altKey) return;
+  // dígitos pelo código da tecla, para Shift+2 continuar sendo "2" (e não "@")
+  const k = /^Digit\d$/.test(e.code) ? e.code.slice(5) : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  if (!$("#alerta").hidden) { if (k === "Escape") $("#alerta").hidden = true; return; }
+  if (k === "E") { e.preventDefault(); return alternarInv(); }
+  if (k === "Escape") {
+    if (invAberto) return alternarInv(false);
+    if (construindo) { construindo = null; return renderConstrucoes(); }
+    if (menuFixo) { menuFixo = null; return renderMenuCel(); }
+    return comando({ tipo: "cancelar" });
+  }
+  if (invAberto) return;
+  if (k === " ") { e.preventDefault(); pausado = !pausado; return renderTopo(); }
+  if (k === "V") return $("#verCampo").click();
+  const c = hover || menuFixo;
+  if (!c) return;
+  const a = opcoes(c).acoes.find(a => a.tecla === k);
+  if (a) { e.preventDefault(); ordenar(a, e.shiftKey); }
+});
+
+function renderMenuCel() {
+  const el = $("#menuCel"), c = hover || menuFixo;
+  if (!c || !S || invAberto) { el.hidden = true; return; }
+  const o = opcoes(c);
+  const linhas = o.acoes.map((a, k) => `<button class="ac ${a === o.padrao && !menuFixo ? "padrao" : ""}" data-ac="${k}"><span class="tecla">${esc(a.tecla)}</span><span>${esc(a.rotulo)}${a.detalhe ? `<small>${esc(a.detalhe)}</small>` : ""}</span></button>`).join("");
+  const notas = o.notas.map(n => `<div class="nota ${n.tipo}">${esc(n.txt)}</div>`).join("");
+  const dica = menuFixo ? "Toque numa ação. Ela entra no lugar das tarefas atuais." : "Clique: ação destacada · Tecla: atalho · Shift: põe na fila";
+  html(el, `<div class="tit"><span>${esc(o.titulo || "")} <span class="small muted">(${c.x}, ${c.y})</span></span>${menuFixo ? `<button data-fecharmenu="1" aria-label="Fechar">×</button>` : ""}</div>${notas}${linhas || `<div class="nota">Nada a fazer aqui.</div>`}<div class="rodape">${dica}</div>`);
+  el.__acoes = o.acoes;
+  el.hidden = false;
+  // no mouse o menu só informa (não pode tapar a célula vizinha); no toque ele é clicável
+  el.classList.toggle("fixo", !!menuFixo);
+  // posiciona ao lado da célula, sem sair da área visível do tabuleiro
+  const b = $("#tabuleiro"), w = el.offsetWidth, h = el.offsetHeight;
+  let x = (c.x + 1) * cs + 12, y = c.y * cs + cs;
+  if (x + w > b.scrollLeft + b.clientWidth) x = c.x * cs - w - 8;
+  x = Math.max(b.scrollLeft + 4, x);
+  y = Math.max(b.scrollTop + 4, Math.min(y, b.scrollTop + b.clientHeight - h - 4));
+  el.style.left = x + "px"; el.style.top = y + "px";
+}
 
 // ---------- painéis
 function html(el, h) { if (el.__h !== h) { el.__h = h; el.innerHTML = h; } }
@@ -144,11 +218,12 @@ const nItem = it => N.nomeItem(C, it);
 const lista = o => Object.entries(o).map(([it, n]) => `${n} ${esc(nItem(it).toLowerCase())}`).join(", ") || "vazio";
 const relogio = tick => { const s = Math.floor(tick / N.TPS); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
 
-function renderTudo() { renderTopo(); renderFerramentas(); renderPaineis(); }
+function renderTudo() { renderTopo(); renderConstrucoes(); renderAtalhos(); renderPaineis(); }
 function renderPaineis() {
   if (!S) return;
-  renderMissao(); renderInventario(); renderFabricar(); renderPesquisa(); renderCelula();
-  renderEras(); renderRegistro(); renderRodape(); renderFerramentas(); renderTopo();
+  renderMissao(); renderInventario(); renderPesquisa(); renderCelula();
+  renderEras(); renderRegistro(); renderRodape(); renderConstrucoes(); renderTopo(); renderMenuCel();
+  if (invAberto) { renderSlots(); renderFabricar(); }
 }
 
 function renderTopo() {
@@ -173,29 +248,48 @@ function renderMissao() {
   html($("#missao"), h);
 }
 
-function renderFerramentas() {
-  const pl = plantavel();
-  html($("#ferramentas"), [
-    ["mao", "✋ Mão"], ["plantar", `🌱 Plantar <span class="c">${S.inv[pl] || 0}</span>`], ["desmontar", "🔧 Desmontar"],
-  ].map(([id, rot]) => `<button data-ferramenta="${id}" class="${ferramenta === id ? "on" : ""}">${rot}</button>`).join(""));
+function renderConstrucoes() {
+  const lib = construiveis();
   html($("#construcoes"), Object.entries(C.elementos).map(([id, e]) => {
-    const lib = S.liberados.includes(id);
+    const k = lib.indexOf(id);
     const custo = Object.entries(e.custo).map(([it, n]) => `${n} ${nItem(it).toLowerCase()}`).join(" + ");
-    return `<button data-construir="${id}" class="${ferramenta === "construir" && construindo === id ? "on" : ""}" ${lib ? "" : "disabled"} title="${esc(e.dica || "")} Custo: ${esc(custo)}">${esc(e.aparencia.simbolo)} ${esc(e.nome)}${lib ? "" : " 🔒"}</button>`;
+    return `<button data-construir="${id}" class="${construindo === id ? "on" : ""}" ${k >= 0 ? "" : "disabled"} title="${esc(e.dica || "")} Custo: ${esc(custo)}">${k >= 0 ? `<span class="tecla">${k + 1}</span>` : ""}${esc(e.aparencia.simbolo)} ${esc(e.nome)}${k >= 0 ? "" : " 🔒"}</button>`;
   }).join(""));
-  let dica = "";
-  if (ferramenta === "mao") dica = segurando ? `Segurando ${esc(nItem(segurando).toLowerCase())}: toque numa máquina para colocar. Toque no item de novo para soltar.` : "Toque em árvores para cortar, em minérios para minerar e em máquinas para recolher e reabastecer. Arraste para cortar ou minerar em sequência.";
-  else if (ferramenta === "plantar") dica = "Toque na grama ou num toco para plantar uma muda. Mudas ao lado da água crescem mais rápido.";
-  else if (ferramenta === "desmontar") dica = "Toque numa máquina para desmontar. Você recebe de volta o custo e o que estava dentro.";
-  else if (construindo) { const e = C.elementos[construindo]; dica = `${esc(e.nome)}: ${esc(e.dica || "")} Custo: ${Object.entries(e.custo).map(([it, n]) => `${n} ${esc(nItem(it).toLowerCase())}`).join(" + ")}.`; }
+  const n = S.jog.fila.length;
+  html($("#fila"), n ? `<span>${n === 1 ? "1 tarefa" : `${n} tarefas`} na fila</span><button class="btn" id="cancelarFila">Parar <span class="tecla">Esc</span></button>` : "");
+  let dica = "Passe o mouse no mapa para ver o que dá para fazer em cada célula. O pato anda até lá e faz.";
+  if (construindo) { const e = C.elementos[construindo]; dica = `${esc(e.nome)}: ${esc(e.dica || "")} Clique onde construir; Shift para várias. Esc cancela.`; }
+  else if (!matchMedia("(hover:hover)").matches) dica = "Toque numa célula para ver as ações. O pato anda até lá e faz.";
   html($("#dica"), prefs.dicas ? dica : "");
 }
 
 function renderInventario() {
   const itens = Object.keys(C.itens).filter(it => S.inv[it]);
-  if (segurando && !S.inv[segurando]) segurando = null;
-  html($("#inventario"), itens.map(it => `<button class="chip ${segurando === it ? "on" : ""}" data-segurar="${it}"><span class="d" style="background:${C.itens[it].cor}"></span>${esc(C.itens[it].nome)} <span class="n">${S.inv[it]}</span></button>`).join("") || `<span class="muted small">Vazio. Corte árvores e minere.</span>`);
+  html($("#inventario"), itens.map(it => `<span class="chip"><span class="d" style="background:${C.itens[it].cor}"></span>${esc(C.itens[it].nome)} <span class="n">${S.inv[it]}</span></span>`).join("") || `<span class="muted small">Vazio. Corte árvores e minere.</span>`);
+  const v = velocidadeCelulasPorSegundo(C);
+  html($("#infoJogador"), `${esc(C.jogador.nome)} a pé: ${String(v).replace(".", ",")} células por segundo, alcance de ${C.jogador.alcance} célula em volta.`);
 }
+
+function renderSlots() {
+  const itens = Object.keys(C.itens).filter(it => S.inv[it]);
+  const vazios = Math.max(0, 20 - itens.length);
+  html($("#slots"), itens.map(it => `<div class="slot" title="${esc(C.itens[it].nome)}"><span class="n">${S.inv[it]}</span><span class="d" style="background:${C.itens[it].cor}"></span><span class="nm">${esc(C.itens[it].nome)}</span></div>`).join("")
+    + `<div class="slot vazio"></div>`.repeat(vazios));
+  html($("#invJogador"), $("#infoJogador").innerHTML);
+}
+
+function alternarInv(abrir = !invAberto) {
+  invAberto = abrir;
+  $("#telaInv").hidden = !abrir;
+  if (abrir) { renderSlots(); renderFabricar(); $("#fecharInv").focus(); }
+  renderMenuCel();
+}
+
+function renderAtalhos() {
+  const ac = Object.entries(TECLAS).map(([a, t]) => `<span class="tecla">${t}</span><span>${esc(NOMES[a])}</span>`).join("");
+  html($("#atalhos"), ac + `<span class="tecla">1–9</span><span>Construir (na célula sob o mouse) ou escolher na barra</span><span class="tecla">Shift</span><span>Põe a ação no fim da fila</span><span class="tecla">E</span><span>Inventário e fabricação</span><span class="tecla">Esc</span><span>Parar tarefas / cancelar construção</span><span class="tecla">Espaço</span><span>Pausar</span><span class="tecla">V</span><span>Ver poluição</span>`);
+}
+const NOMES = { ir: "Ir até a célula", colher: "Cortar / colher", minerar: "Minerar", plantar: "Plantar muda", recolher: "Recolher da máquina", abastecer: "Abastecer com combustível", fornecer: "Fornecer entrada (minério, madeira)", desmontar: "Desmontar máquina" };
 
 function renderFabricar() {
   html($("#fabricar"), Object.entries(C.receitas).filter(([, r]) => r.mao).map(([id, r]) => {
@@ -263,9 +357,12 @@ document.addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
   const d = b.dataset;
   if (d.ir) return ir(d.ir);
-  if (d.ferramenta) { ferramenta = d.ferramenta; construindo = null; return renderFerramentas(); }
-  if (d.construir) { ferramenta = "construir"; construindo = d.construir; return renderFerramentas(); }
-  if (d.segurar) { segurando = segurando === d.segurar ? null : d.segurar; ferramenta = "mao"; construindo = null; return renderPaineis(); }
+  if (d.construir) { construindo = construindo === d.construir ? null : d.construir; return renderConstrucoes(); }
+  if (d.ac) { const a = $("#menuCel").__acoes?.[Number(d.ac)]; menuFixo = null; ordenar(a, e.shiftKey); return renderMenuCel(); }
+  if (d.fecharmenu) { menuFixo = null; return renderMenuCel(); }
+  if (b.id === "cancelarFila") return comando({ tipo: "cancelar" });
+  if (b.id === "abrirInv" || b.id === "abrirInv2") return alternarInv(true);
+  if (b.id === "fecharInv") return alternarInv(false);
   if (d.fabricar) { for (let k = 0; k < Number(d.n); k++) if (!comando({ tipo: "fabricar", receita: d.fabricar }, k > 0).ok) break; return; }
   if (d.pesquisar) return comando({ tipo: "pesquisar", tecnologia: d.pesquisar });
   if (b.id === "pausar") { pausado = !pausado; return renderTopo(); }
@@ -358,26 +455,27 @@ function alerta(tit, corpo, botao = "Entendi", tipo = "") {
 $("#alertaBtn").onclick = () => { $("#alerta").hidden = true; };
 function comoJogar() {
   alerta("Como jogar", `<ol>
-    <li>Com a <b>Mão</b>, corte árvores (madeira e mudas) e minere pedra, ferro e carvão.</li>
-    <li>Construa uma <b>mineradora</b> em cima do ferro e uma <b>fornalha</b> encostada nela: o minério passa sozinho para a fornalha.</li>
-    <li>Toque nas máquinas para colocar combustível (carvão ou madeira) e recolher o que produziram.</li>
-    <li>Máquinas poluem. A <b>floresta</b> absorve a poluição, mas se ela passar do limite as árvores adoecem. Plante mudas!</li>
-    <li>Missão: <b>${esc(C.missao.metas.find(m => m.tipo === "producao")?.nome || "produzir")}</b> sem deixar a floresta cair abaixo do mínimo.</li>
-    <li>Faça pacotes de ciência para pesquisar e chegar à próxima era.</li></ol>`, "Começar");
-  gravar("duckgr:viuComoJogar", true);
+    <li>Você é o <b>pato</b>. Ele só mexe no que está ao lado dele; para o resto, anda até lá.</li>
+    <li>Passe o mouse numa célula para ver o que dá para fazer, com uma tecla para cada ação: <b>C</b> corta árvore, <b>M</b> minera, <b>R</b> recolhe, <b>A</b> abastece. Clicar faz a ação destacada. No celular, toque na célula.</li>
+    <li>Com <b>Shift</b> a ação entra na fila: o pato faz uma depois da outra.</li>
+    <li>Construa uma <b>mineradora</b> (tecla 1) em cima do ferro e uma <b>fornalha</b> (tecla 2) encostada nela: o minério passa sozinho para a fornalha.</li>
+    <li>Máquinas poluem. A <b>floresta</b> absorve a poluição, mas se ela passar do limite as árvores adoecem. Plante mudas (<b>P</b>)!</li>
+    <li>Missão: <b>${esc(C.missao.metas.find(m => m.tipo === "producao")?.nome || "produzir")}</b> sem deixar a floresta cair abaixo do mínimo. No inventário (<b>E</b>) você fabrica engrenagens e pacotes de ciência para pesquisar.</li></ol>`, "Começar");
+  gravar("duckgr:viuComoJogar2", true);
 }
 
 // ---------- partida: entra direto num jogo, sem menu no caminho
 const salvo = ler(CHAVE_PARTIDA, null);
 try {
-  if (salvo && PACOTES.some(p => p.id === salvo.pacote)) iniciar(salvo, salvo.tick || 0);
+  // partidas de versões antigas do pacote não são refeitas: os comandos mudaram
+  if (salvo && PACOTES.some(p => p.id === salvo.pacote) && salvo.versao === pacote(salvo.pacote).versao) iniciar(salvo, salvo.tick || 0);
   else novoPadrao();
 } catch (err) {
   console.error("Partida salva não pôde ser carregada; começando de novo.", err);
   novoPadrao();
 }
 ir("jogo");
-if (!ler("duckgr:viuComoJogar", false)) comoJogar();
+if (!ler("duckgr:viuComoJogar2", false)) comoJogar();
 requestAnimationFrame(quadro);
 
 // para depurar no console do navegador: duckgr.estado(), duckgr.pacote()

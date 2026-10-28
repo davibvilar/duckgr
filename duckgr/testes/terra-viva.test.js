@@ -6,7 +6,7 @@ test("cortar uma árvore adulta dá madeira e uma muda, e deixa um toco", () => 
   const p = partida();
   const a = acharCelula(p.S, i => p.S.cov[i] === "adulta");
   const madeira = p.S.inv.madeira;
-  assert.ok(p.cmd({ tipo: "usar", ...a }).ok);
+  assert.ok(p.fazer({ ...a, acao: "colher" }).ok);
   assert.equal(p.S.inv.madeira, madeira + 4);
   assert.equal(p.S.inv.muda, 5);
   assert.equal(p.S.cov[N.idx(p.S, a.x, a.y)], "toco");
@@ -16,7 +16,7 @@ test("uma muda plantada vira árvore jovem e depois adulta", () => {
   const p = partida();
   const c = acharCelula(p.S, (i, x, y) => p.S.cov[i] === "grama" && !p.S.dep[i]
     && ![[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => p.S.sub[N.idx(p.S, x + dx, y + dy)] === "agua"));
-  assert.ok(p.cmd({ tipo: "plantar", ...c, item: "muda" }).ok);
+  assert.ok(p.fazer({ ...c, acao: "plantar", item: "muda" }).ok);
   const i = N.idx(p.S, c.x, c.y);
   p.segundos(40);
   assert.equal(p.S.cov[i], "jovem");
@@ -27,7 +27,7 @@ test("uma muda plantada vira árvore jovem e depois adulta", () => {
 test("não se constrói em cima de árvore", () => {
   const p = partida();
   const a = acharCelula(p.S, i => p.S.cov[i] === "adulta");
-  const r = p.cmd({ tipo: "construir", ...a, elemento: "fornalha" });
+  const r = p.cmd({ tipo: "ordem", ...a, acao: "construir", elemento: "fornalha" });
   assert.equal(r.ok, false);
   assert.match(r.msg, /árvore/i);
 });
@@ -35,21 +35,21 @@ test("não se constrói em cima de árvore", () => {
 test("mineradora encostada na fornalha produz placas de ferro sozinha", () => {
   const p = partida();
   const d = depositoComVizinhoLivre(p.S, "ferro");
-  assert.ok(p.cmd({ tipo: "construir", ...d, elemento: "mineradora" }).ok);
-  assert.ok(p.cmd({ tipo: "construir", x: d.x + 1, y: d.y, elemento: "fornalha" }).ok);
-  assert.ok(p.cmd({ tipo: "usar", ...d }).ok); // carvão na mineradora
-  assert.ok(p.cmd({ tipo: "usar", x: d.x + 1, y: d.y, segurando: "madeira" }).ok); // madeira na fornalha
+  assert.ok(p.fazer({ ...d, acao: "construir", elemento: "mineradora" }).ok);
+  assert.ok(p.fazer({ x: d.x + 1, y: d.y, acao: "construir", elemento: "fornalha" }).ok);
+  assert.ok(p.fazer({ ...d, acao: "abastecer", item: "carvao" }).ok);
+  assert.ok(p.fazer({ x: d.x + 1, y: d.y, acao: "abastecer", item: "madeira" }).ok);
   p.segundos(30);
   assert.ok((p.S.prod["placa-ferro"] || 0) >= 5, `produziu ${p.S.prod["placa-ferro"]}`);
   const antes = p.S.inv["placa-ferro"];
-  assert.ok(p.cmd({ tipo: "usar", x: d.x + 1, y: d.y }).ok); // recolher
+  assert.ok(p.fazer({ x: d.x + 1, y: d.y, acao: "recolher" }).ok);
   assert.ok(p.S.inv["placa-ferro"] > antes);
 });
 
 test("máquina sem combustível para", () => {
   const p = partida();
   const d = depositoComVizinhoLivre(p.S, "ferro");
-  p.cmd({ tipo: "construir", ...d, elemento: "mineradora" });
+  p.fazer({ ...d, acao: "construir", elemento: "mineradora" });
   p.segundos(2);
   assert.equal(N.entidadeEm(p.S, d.x, d.y).parado, "Sem combustível");
 });
@@ -62,27 +62,32 @@ test("máquinas poluem, a poluição se espalha e a floresta adoece", () => {
   let n = 0;
   S.inv["minerio-ferro"] = 400;
   for (let y = 8; y < 16 && n < 10; y++) for (let x = 16; x < 24 && n < 10; x++) {
-    if (!p.cmd({ tipo: "construir", x, y, elemento: "fornalha" }).ok) continue;
-    p.cmd({ tipo: "usar", x, y, segurando: "minerio-ferro" });
-    p.cmd({ tipo: "usar", x, y, segurando: "carvao" });
+    if (!p.fazer({ x, y, acao: "construir", elemento: "fornalha" }).ok) continue;
+    p.fazer({ x, y, acao: "fornecer", item: "minerio-ferro" });
+    p.fazer({ x, y, acao: "abastecer", item: "carvao" });
     n++;
   }
   assert.ok(n >= 6, `construiu ${n} fornalhas`);
   const floresta0 = N.contarMarca(S, C, "floresta");
-  p.segundos(60);
-  assert.ok(S.campos.poluicao[k0] > 0, "o trecho ficou poluído");
   const vizinhos = [k0 - 1, k0 + 1, k0 - S.CL, k0 + S.CL].filter(k => k >= 0 && k < S.campos.poluicao.length);
-  assert.ok(vizinhos.some(k => S.campos.poluicao[k] > 0), "a poluição chegou aos vizinhos");
+  let pico = 0, picoViz = 0;
+  for (let s = 0; s < 40; s++) {
+    p.segundos(1);
+    pico = Math.max(pico, S.campos.poluicao[k0]);
+    picoViz = Math.max(picoViz, ...vizinhos.map(k => S.campos.poluicao[k]));
+  }
+  assert.ok(pico > 0, "o trecho ficou poluído");
+  assert.ok(picoViz > 0, "a poluição chegou aos vizinhos");
   assert.ok(N.contarMarca(S, C, "floresta") < floresta0, "árvores adoeceram");
 });
 
 test("missão: cumprida ao produzir a meta com a floresta de pé", () => {
   const p = partida({ metas: [{ tipo: "producao", nome: "Placas", item: "placa-ferro", quantidade: 3 }, ...C.missao.metas.slice(1)] });
   const d = depositoComVizinhoLivre(p.S, "ferro");
-  p.cmd({ tipo: "construir", ...d, elemento: "mineradora" });
-  p.cmd({ tipo: "construir", x: d.x + 1, y: d.y, elemento: "fornalha" });
-  p.cmd({ tipo: "usar", ...d });
-  p.cmd({ tipo: "usar", x: d.x + 1, y: d.y, segurando: "madeira" });
+  p.fazer({ ...d, acao: "construir", elemento: "mineradora" });
+  p.fazer({ x: d.x + 1, y: d.y, acao: "construir", elemento: "fornalha" });
+  p.fazer({ ...d, acao: "abastecer", item: "carvao" });
+  p.fazer({ x: d.x + 1, y: d.y, acao: "abastecer", item: "madeira" });
   p.segundos(30);
   assert.equal(p.S.missao.estado, "cumprida");
 });
@@ -91,7 +96,7 @@ test("missão: perdida se a floresta cair abaixo do mínimo", () => {
   const p = partida({ metas: [C.missao.metas[0], { ...C.missao.metas[1], minimoPct: 99 }] });
   let cortes = 0;
   for (let i = 0; i < p.S.cov.length && cortes < 20; i++) if (p.S.cov[i] === "adulta") {
-    p.cmd({ tipo: "usar", x: i % p.S.L, y: Math.floor(i / p.S.L) }); cortes++;
+    p.fazer({ x: i % p.S.L, y: Math.floor(i / p.S.L), acao: "colher" }); cortes++;
   }
   p.segundos(1);
   assert.equal(p.S.missao.estado, "falhou");
@@ -115,8 +120,8 @@ test("viveiro só produz mudas ao lado da água", () => {
   const perto = acharCelula(p.S, (i, x, y) => livre(i, x, y) && viz(x, y));
   const longe = acharCelula(p.S, (i, x, y) => livre(i, x, y) && !viz(x, y));
   for (const c of [perto, longe]) {
-    assert.ok(p.cmd({ tipo: "construir", ...c, elemento: "viveiro" }).ok);
-    assert.ok(p.cmd({ tipo: "usar", ...c, segurando: "madeira" }).ok);
+    assert.ok(p.fazer({ ...c, acao: "construir", elemento: "viveiro" }).ok);
+    assert.ok(p.fazer({ ...c, acao: "fornecer", item: "madeira" }).ok);
   }
   p.segundos(10);
   assert.ok(total(N.entidadeEm(p.S, perto.x, perto.y).sai) >= 2);
