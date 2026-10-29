@@ -1,120 +1,121 @@
-//! O núcleo do DuckGR para o navegador.
+//! The DuckGR core for the browser.
 //!
-//! A interface com o JavaScript é mínima e sem dependências: o JavaScript
-//! escreve um texto JSON na memória do módulo, chama uma função e lê a
-//! resposta (também JSON) de um buffer de saída. Quem fala com este módulo
-//! é `web/plataforma/nucleo.js`; o resto da interface web não sabe que ele
-//! existe.
+//! The interface with JavaScript is minimal and has no dependencies:
+//! JavaScript writes a JSON text into the module's memory, calls a function
+//! and reads the answer (also JSON) from an output buffer. The only one that
+//! talks to this module is `web/platform/core.js`; the rest of the web
+//! interface doesn't know it exists.
 //!
-//! Mundos e pacotes vivem aqui dentro e são identificados por um número.
+//! Worlds and packages live in here and are identified by a number.
 
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use duckgr_sim::{estado::Acao, estado::Ordem, jogador, Estado, Pacote};
+use duckgr_sim::state::{Action, Order};
+use duckgr_sim::{player, Package, State};
 use serde_json::{json, Value};
 
-pub struct Mundo {
-    pub p: Rc<Pacote>,
-    pub s: Estado,
+pub struct World {
+    pub p: Rc<Package>,
+    pub s: State,
 }
 
 thread_local! {
-    static PACOTES: RefCell<Vec<Rc<Pacote>>> = const { RefCell::new(Vec::new()) };
-    static MUNDOS: RefCell<Vec<Option<Mundo>>> = const { RefCell::new(Vec::new()) };
-    static SAIDA: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
+    static PACKAGES: RefCell<Vec<Rc<Package>>> = const { RefCell::new(Vec::new()) };
+    static WORLDS: RefCell<Vec<Option<World>>> = const { RefCell::new(Vec::new()) };
+    static OUTPUT: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
-fn sair(txt: &str) {
-    SAIDA.with(|s| {
+fn output(txt: &str) {
+    OUTPUT.with(|s| {
         let mut s = s.borrow_mut();
         s.clear();
         s.extend_from_slice(txt.as_bytes());
     });
 }
 
-fn guardar(m: Mundo) -> i32 {
-    MUNDOS.with(|ms| {
-        let mut ms = ms.borrow_mut();
-        match ms.iter().position(Option::is_none) {
+fn store(w: World) -> i32 {
+    WORLDS.with(|ws| {
+        let mut ws = ws.borrow_mut();
+        match ws.iter().position(Option::is_none) {
             Some(k) => {
-                ms[k] = Some(m);
+                ws[k] = Some(w);
                 k as i32
             }
             None => {
-                ms.push(Some(m));
-                (ms.len() - 1) as i32
+                ws.push(Some(w));
+                (ws.len() - 1) as i32
             }
         }
     })
 }
 
-fn com_mundo<T>(h: i32, f: impl FnOnce(&mut Mundo) -> T) -> Option<T> {
-    MUNDOS.with(|ms| ms.borrow_mut().get_mut(h as usize).and_then(Option::as_mut).map(f))
+fn with_world<T>(h: i32, f: impl FnOnce(&mut World) -> T) -> Option<T> {
+    WORLDS.with(|ws| ws.borrow_mut().get_mut(h as usize).and_then(Option::as_mut).map(f))
 }
 
-fn pacote(h: i32) -> Option<Rc<Pacote>> {
-    PACOTES.with(|ps| ps.borrow().get(h as usize).cloned())
+fn package(h: i32) -> Option<Rc<Package>> {
+    PACKAGES.with(|ps| ps.borrow().get(h as usize).cloned())
 }
 
-/// Lê o texto JSON que o JavaScript deixou na memória.
+/// Reads the JSON text JavaScript left in memory.
 ///
 /// # Safety
-/// `ptr` e `len` precisam apontar para bytes alocados com [`alocar`].
-unsafe fn ler(ptr: *const u8, len: usize) -> Result<Value, String> {
+/// `ptr` and `len` must point to bytes allocated with [`alloc`].
+unsafe fn read(ptr: *const u8, len: usize) -> Result<Value, String> {
     let bytes = std::slice::from_raw_parts(ptr, len);
-    serde_json::from_slice(bytes).map_err(|e| format!("JSON inválido: {e}"))
+    serde_json::from_slice(bytes).map_err(|e| format!("invalid JSON: {e}"))
 }
 
-fn resultado(r: Result<i32, String>) -> i32 {
+fn handle(r: Result<i32, String>) -> i32 {
     match r {
         Ok(h) => h,
         Err(e) => {
-            sair(&e);
+            output(&e);
             -1
         }
     }
 }
 
-/// Reserva `len` bytes para o JavaScript escrever.
+/// Reserves `len` bytes for JavaScript to write into.
 #[no_mangle]
-pub extern "C" fn alocar(len: usize) -> *mut u8 {
+pub extern "C" fn alloc(len: usize) -> *mut u8 {
     let mut v = Vec::<u8>::with_capacity(len.max(1));
     let p = v.as_mut_ptr();
     std::mem::forget(v);
     p
 }
 
-/// Devolve os bytes reservados com [`alocar`].
+/// Gives back the bytes reserved with [`alloc`].
 ///
 /// # Safety
-/// `ptr` e `len` precisam ser exatamente os de uma chamada a [`alocar`].
+/// `ptr` and `len` must be exactly those of a call to [`alloc`].
 #[no_mangle]
-pub unsafe extern "C" fn desalocar(ptr: *mut u8, len: usize) {
+pub unsafe extern "C" fn dealloc(ptr: *mut u8, len: usize) {
     drop(Vec::from_raw_parts(ptr, 0, len.max(1)));
 }
 
 #[no_mangle]
-pub extern "C" fn saida_ptr() -> *const u8 {
-    SAIDA.with(|s| s.borrow().as_ptr())
+pub extern "C" fn out_ptr() -> *const u8 {
+    OUTPUT.with(|s| s.borrow().as_ptr())
 }
 
 #[no_mangle]
-pub extern "C" fn saida_len() -> usize {
-    SAIDA.with(|s| s.borrow().len())
+pub extern "C" fn out_len() -> usize {
+    OUTPUT.with(|s| s.borrow().len())
 }
 
-/// Compila um pacote (JSON). Devolve o número do pacote e deixa na saída os
-/// dados convertidos; ou -1 e a mensagem de erro.
+/// Compiles a package (JSON). Returns the package's number and leaves the
+/// converted data in the output; or -1 and the error message.
 ///
 /// # Safety
-/// Ver [`ler`].
+/// See [`read`].
 #[no_mangle]
-pub unsafe extern "C" fn pacote_compilar(ptr: *const u8, len: usize) -> i32 {
-    resultado(ler(ptr, len).and_then(|v| {
-        let (p, convertido) = duckgr_sim::compilar(&v)?;
-        sair(&convertido.to_string());
-        Ok(PACOTES.with(|ps| {
+pub unsafe extern "C" fn package_compile(ptr: *const u8, len: usize) -> i32 {
+    handle(read(ptr, len).and_then(|v| {
+        let (p, converted) = duckgr_sim::compile(&v)?;
+        output(&converted.to_string());
+        Ok(PACKAGES.with(|ps| {
             let mut ps = ps.borrow_mut();
             ps.push(Rc::new(p));
             (ps.len() - 1) as i32
@@ -122,132 +123,132 @@ pub unsafe extern "C" fn pacote_compilar(ptr: *const u8, len: usize) -> i32 {
     }))
 }
 
-/// Cria um mundo novo a partir da configuração (JSON).
+/// Creates a new world from the configuration (JSON).
 ///
 /// # Safety
-/// Ver [`ler`].
+/// See [`read`].
 #[no_mangle]
-pub unsafe extern "C" fn mundo_novo(pac: i32, ptr: *const u8, len: usize) -> i32 {
-    resultado(ler(ptr, len).and_then(|cfg| {
-        let p = pacote(pac).ok_or("pacote desconhecido")?;
-        let s = duckgr_sim::novo_estado(&p, &cfg)?;
-        Ok(guardar(Mundo { p, s }))
+pub unsafe extern "C" fn world_new(pkg: i32, ptr: *const u8, len: usize) -> i32 {
+    handle(read(ptr, len).and_then(|cfg| {
+        let p = package(pkg).ok_or("unknown package")?;
+        let s = duckgr_sim::new_state(&p, &cfg)?;
+        Ok(store(World { p, s }))
     }))
 }
 
-/// Recria um mundo a partir do estado em JSON (um checkpoint).
+/// Rebuilds a world from its state in JSON (a checkpoint).
 ///
 /// # Safety
-/// Ver [`ler`].
+/// See [`read`].
 #[no_mangle]
-pub unsafe extern "C" fn mundo_restaurar(pac: i32, ptr: *const u8, len: usize) -> i32 {
-    resultado(ler(ptr, len).and_then(|v| {
-        let p = pacote(pac).ok_or("pacote desconhecido")?;
-        let s = Estado::de_json(&v, &p)?;
-        Ok(guardar(Mundo { p, s }))
+pub unsafe extern "C" fn world_restore(pkg: i32, ptr: *const u8, len: usize) -> i32 {
+    handle(read(ptr, len).and_then(|v| {
+        let p = package(pkg).ok_or("unknown package")?;
+        let s = State::from_json(&v, &p)?;
+        Ok(store(World { p, s }))
     }))
 }
 
-/// Refaz um mundo do zero: `{ cfg, cmds, ate }`.
+/// Rebuilds a world from zero: `{ cfg, cmds, until }`.
 ///
 /// # Safety
-/// Ver [`ler`].
+/// See [`read`].
 #[no_mangle]
-pub unsafe extern "C" fn mundo_rodar(pac: i32, ptr: *const u8, len: usize) -> i32 {
-    resultado(ler(ptr, len).and_then(|v| {
-        let p = pacote(pac).ok_or("pacote desconhecido")?;
+pub unsafe extern "C" fn world_replay(pkg: i32, ptr: *const u8, len: usize) -> i32 {
+    handle(read(ptr, len).and_then(|v| {
+        let p = package(pkg).ok_or("unknown package")?;
         let cmds = v.get("cmds").and_then(Value::as_array).cloned().unwrap_or_default();
-        let ate = v.get("ate").and_then(Value::as_i64).unwrap_or(0);
-        let s = duckgr_sim::rodar(&p, v.get("cfg").unwrap_or(&Value::Null), &cmds, ate)?;
-        Ok(guardar(Mundo { p, s }))
+        let until = v.get("until").and_then(Value::as_i64).unwrap_or(0);
+        let s = duckgr_sim::replay(&p, v.get("cfg").unwrap_or(&Value::Null), &cmds, until)?;
+        Ok(store(World { p, s }))
     }))
 }
 
 #[no_mangle]
-pub extern "C" fn mundo_liberar(h: i32) {
-    MUNDOS.with(|ms| {
-        if let Some(m) = ms.borrow_mut().get_mut(h as usize) {
-            *m = None;
+pub extern "C" fn world_free(h: i32) {
+    WORLDS.with(|ws| {
+        if let Some(w) = ws.borrow_mut().get_mut(h as usize) {
+            *w = None;
         }
     });
 }
 
-/// Avança `n` ticks. Devolve quantos eventos estão esperando a interface.
+/// Advances `n` ticks. Returns how many events are waiting for the interface.
 #[no_mangle]
-pub extern "C" fn mundo_passo(h: i32, n: u32) -> u32 {
-    com_mundo(h, |m| {
+pub extern "C" fn world_step(h: i32, n: u32) -> u32 {
+    with_world(h, |w| {
         for _ in 0..n {
-            duckgr_sim::passo(&mut m.s, &m.p);
+            duckgr_sim::step(&mut w.s, &w.p);
         }
-        m.s.eventos.len() as u32
+        w.s.events.len() as u32
     })
     .unwrap_or(0)
 }
 
 #[no_mangle]
-pub extern "C" fn mundo_tick(h: i32) -> f64 {
-    com_mundo(h, |m| m.s.tick as f64).unwrap_or(-1.0)
+pub extern "C" fn world_tick(h: i32) -> f64 {
+    with_world(h, |w| w.s.tick as f64).unwrap_or(-1.0)
 }
 
 #[no_mangle]
-pub extern "C" fn mundo_custo_passagem(h: i32, x: i32, y: i32) -> i32 {
-    com_mundo(h, |m| jogador::custo_passagem(&m.s, &m.p, x as i64, y as i64) as i32).unwrap_or(-1)
+pub extern "C" fn world_passage_cost(h: i32, x: i32, y: i32) -> i32 {
+    with_world(h, |w| player::passage_cost(&w.s, &w.p, x as i64, y as i64) as i32).unwrap_or(-1)
 }
 
-/// Uma operação sobre o mundo, descrita em JSON (`{"op": ..., ...}`). A
-/// resposta fica na saída. Devolve 0, ou -1 se deu erro.
+/// An operation on the world, described in JSON (`{"op": ..., ...}`). The
+/// answer goes to the output. Returns 0, or -1 on error.
 ///
 /// # Safety
-/// Ver [`ler`].
+/// See [`read`].
 #[no_mangle]
-pub unsafe extern "C" fn mundo_op(h: i32, ptr: *const u8, len: usize) -> i32 {
-    let r = ler(ptr, len).and_then(|op| com_mundo(h, |m| operar(m, &op)).unwrap_or(Err("mundo desconhecido".into())));
+pub unsafe extern "C" fn world_op(h: i32, ptr: *const u8, len: usize) -> i32 {
+    let r = read(ptr, len).and_then(|op| with_world(h, |w| operate(w, &op)).unwrap_or(Err("unknown world".into())));
     match r {
         Ok(v) => {
-            sair(&v.to_string());
+            output(&v.to_string());
             0
         }
         Err(e) => {
-            sair(&e);
+            output(&e);
             -1
         }
     }
 }
 
 fn int(v: &Value, k: &str) -> Result<i64, String> {
-    v.get(k).and_then(Value::as_i64).ok_or_else(|| format!("falta \"{k}\""))
+    v.get(k).and_then(Value::as_i64).ok_or_else(|| format!("missing \"{k}\""))
 }
 
-/// As operações do mundo, em Rust puro (para poder testar sem o navegador).
-pub fn operar(m: &mut Mundo, op: &Value) -> Result<Value, String> {
-    let (p, s) = (&*m.p, &mut m.s);
+/// The world operations, in plain Rust (so they can be tested without a browser).
+pub fn operate(w: &mut World, op: &Value) -> Result<Value, String> {
+    let (p, s) = (&*w.p, &mut w.s);
     Ok(match op.get("op").and_then(Value::as_str).unwrap_or("") {
-        "estado" => s.para_json(p),
+        "state" => s.view_json(p),
         "hash" => Value::String(s.hash(p)),
-        "aplicar" => duckgr_sim::aplicar(s, p, op.get("cmd").unwrap_or(&Value::Null)),
-        "eventos" => Value::Array(std::mem::take(&mut s.eventos)),
-        "acoes" => jogador::acoes_possiveis(s, p, int(op, "x")?, int(op, "y")?),
-        "progresso" => Value::Array(duckgr_sim::progresso_missao(s, p)),
-        "contarMarca" => json!(duckgr_sim::contar_marca(s, p, op.get("marca").and_then(Value::as_str).unwrap_or(""))),
-        "avancar" => {
+        "apply" => duckgr_sim::apply(s, p, op.get("cmd").unwrap_or(&Value::Null)),
+        "events" => Value::Array(std::mem::take(&mut s.events)),
+        "actions" => player::possible_actions(s, p, int(op, "x")?, int(op, "y")?),
+        "progress" => Value::Array(duckgr_sim::mission_progress(s, p)),
+        "countMark" => json!(duckgr_sim::count_mark(s, p, op.get("mark").and_then(Value::as_str).unwrap_or(""))),
+        "advance" => {
             let cmds = op.get("cmds").and_then(Value::as_array).cloned().unwrap_or_default();
-            duckgr_sim::avancar(s, p, &cmds, int(op, "ate")?);
+            duckgr_sim::advance(s, p, &cmds, int(op, "until")?);
             Value::Null
         }
-        "caminho" => {
-            let o = op.get("ordem").ok_or("falta a ordem")?;
-            let ordem = Ordem {
+        "path" => {
+            let o = op.get("order").ok_or("missing the order")?;
+            let order = Order {
                 x: int(o, "x")?,
                 y: int(o, "y")?,
-                acao: o.get("acao").and_then(Value::as_str).and_then(Acao::de).ok_or("ação desconhecida")?,
+                action: o.get("acao").and_then(Value::as_str).and_then(Action::from_wire).ok_or("unknown action")?,
                 item: None,
-                elemento: None,
-                vezes: None,
-                feitas: None,
+                element: None,
+                times: None,
+                done: None,
             };
-            let (jx, jy) = (int(op, "x")?, int(op, "y")?);
-            jogador::caminho(s, p, jx, jy, &ordem).map_or(Value::Null, |r| json!(r))
+            let (px, py) = (int(op, "x")?, int(op, "y")?);
+            player::path(s, p, px, py, &order).map_or(Value::Null, |r| json!(r))
         }
-        outro => return Err(format!("operação desconhecida: {outro}")),
+        other => return Err(format!("unknown operation: {other}")),
     })
 }

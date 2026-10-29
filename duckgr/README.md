@@ -12,6 +12,8 @@ Versão jogável: **Terra Viva** (nome provisório), a primeira era do mundo ind
 
 Controles: passe o mouse numa célula para ver as ações possíveis, cada uma com uma tecla (C corta, M minera, R recolhe, A abastece, F fornece, P planta, D desmonta, I vai até lá, 1–9 constrói). Clicar faz a ação destacada; com Shift, a ação entra na fila. E abre o inventário, Esc para as tarefas, Espaço pausa.
 
+Idioma: o jogo abre no idioma do navegador (português ou inglês) e dá para trocar em Configurações. Os atalhos de teclado acima são os do português; em inglês as letras mudam (a tela de atalhos mostra todas).
+
 Câmera: arraste para mover o mapa e use a roda do mouse (ou + e −) para o zoom; no celular, arraste com um dedo e faça pinça com dois. O botão ◎ (tecla H) volta a seguir o pato, e ⛶ (tecla T) põe o jogo em tela cheia. No celular, tocar numa célula abre uma folha com as ações em botões grandes, e "+ fila" faz o papel do Shift. A cada merge na `main`, o jogo é publicado no GitHub Pages.
 
 O rascunho das regras do Paz ou Guerra continua em [`docs/prototipos/paz-ou-guerra.html`](docs/prototipos/paz-ou-guerra.html).
@@ -23,29 +25,35 @@ Precisa do Rust (com o alvo WebAssembly) e do Node 22.
 ```sh
 rustup target add wasm32-unknown-unknown   # uma vez só
 npm test          # compila o núcleo para WebAssembly e roda os testes
-npm run servir    # compila e abre um servidor em http://localhost:8000
+npm run serve     # compila e abre um servidor em http://localhost:8000
 cargo test        # testes do núcleo em Rust
 ```
 
 ## Como o código está dividido
 
 - `crates/duckgr-sim/`: o núcleo da simulação, em Rust puro. Não sabe que existe árvore, fornalha ou poluição.
-  - `pacote.rs`: valida o pacote do mundo e o transforma em tabelas numeradas.
-  - `estado.rs`: o estado do mundo (células em camadas, elementos, campos, jogador) e o JSON dele, que é o checkpoint do save e a base do hash.
-  - `gerador.rs`: gera o mapa a partir das regras do pacote.
+  - `package.rs`: valida o pacote do mundo e o transforma em tabelas numeradas.
+  - `state.rs`: o estado do mundo (células em camadas, elementos, campos, jogador) e o JSON dele, que é o checkpoint do save e a base do hash.
+  - `generator.rs`: gera o mapa a partir das regras do pacote.
   - `lib.rs`: o tick (elementos feitos de componentes, campos por chunk, crescimento, missão), os comandos e o replay.
-  - `jogador.rs`: o jogador como agente (posição, velocidade, alcance), caminho até o alvo, fila de ordens e as ações genéricas (colher, minerar, plantar, construir, recolher, abastecer, fornecer, desmontar).
+  - `player.rs`: o jogador como agente (posição, velocidade, alcance), caminho até o alvo, fila de ordens e as ações genéricas (colher, minerar, plantar, construir, recolher, abastecer, fornecer, desmontar).
+  - `message.rs`: as mensagens para o jogador. O núcleo não escreve frases: diz o que aconteceu com uma chave e argumentos (`{"key": "log.built", "args": {...}}`), e a interface monta o texto no idioma do jogador.
   - `tests/`: regras reproduzidas a partir de comandos, saves antigos e o orçamento de desempenho.
 - `crates/duckgr-wasm/`: o núcleo compilado para WebAssembly, com uma interface mínima em JSON.
-- `web/plataforma/`: a plataforma no navegador.
-  - `nucleo.js`: a ponte para o núcleo em WebAssembly (`duckgr.wasm`, gerado por `npm run wasm`).
-  - `persistencia.js`: o save (checkpoint do estado + histórico de comandos, em JSON com gzip), exportar e importar.
-  - `desenho.js`: desenha o mundo num canvas, com a aparência que o pacote define.
+- `web/platform/`: a plataforma no navegador.
+  - `core.js`: a ponte para o núcleo em WebAssembly (`duckgr.wasm`, gerado por `npm run wasm`).
+  - `persistence.js`: o save (checkpoint do estado + histórico de comandos, em JSON com gzip), exportar e importar.
+  - `render.js`: desenha o mundo num canvas, com a aparência que o pacote define.
+  - `i18n.js` e `locales/`: os idiomas. Todo texto da interface fica em `locales/pt-BR.js` e `locales/en.js`, com as mesmas chaves; um teste confere que nenhum idioma ficou sem alguma chave.
   - `app.js`: telas (jogo, menu, configurações, montagem do mundo), laço de ticks e salvamento.
-- `web/jogos/`: os mundos. Cada um é um pacote de dados.
-  - `terra-viva/pacote.js`: recursos, coberturas, receitas, máquinas, campos, eras, tecnologias e missão.
-  - `catalogo.js`: a lista de mundos oferecidos pela plataforma.
-- `testes/`: testes em JavaScript que jogam pelo núcleo em WebAssembly. Em `testes/dados/` ficam o pacote exportado para os testes em Rust (`npm run pacotes`) e um save gravado pelo antigo núcleo em JavaScript, que precisa continuar abrindo com o mesmo hash.
+- `web/games/`: os mundos. Cada um é um pacote de dados.
+  - `terra-viva/package.js`: recursos, coberturas, receitas, máquinas, campos, eras, tecnologias e missão, com os textos em português.
+  - `terra-viva/locales/en.js`: os textos do pacote em inglês, nos mesmos lugares do `package.js`.
+  - `catalog.js`: a lista de mundos oferecidos pela plataforma e as traduções de cada um.
+- `tests/`: testes em JavaScript que jogam pelo núcleo em WebAssembly. Em `tests/data/` ficam o pacote exportado para os testes em Rust (`npm run packages`) e um save gravado pelo antigo núcleo em JavaScript, que precisa continuar abrindo com o mesmo hash.
+- `tools/`: scripts do `npm` (compilar o wasm, exportar os pacotes).
+
+O código (nomes, arquivos, comentários) é escrito em inglês. Ficam em português, por serem formatos já gravados em saves e pacotes, as chaves do JSON do estado e do save, os campos dos comandos e as chaves e ids dos pacotes (`"substratos"`, `"madeira"`...); mudá-los exige uma versão nova do formato.
 
 O núcleo começou em JavaScript, para fixar o modelo (camadas, componentes, comandos, determinismo), e foi migrado para Rust sem mudar o resultado: o mesmo pacote, a mesma configuração e os mesmos comandos dão exatamente o mesmo mundo e o mesmo hash nos dois. Por isso os saves de antes da migração continuam abrindo.
 

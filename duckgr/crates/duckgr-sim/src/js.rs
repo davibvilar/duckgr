@@ -1,12 +1,12 @@
-//! Aritmética com a mesma semântica do protótipo em JavaScript.
+//! Arithmetic with the same semantics as the JavaScript prototype.
 //!
-//! O núcleo nasceu em JavaScript e os saves antigos guardam o hash que ele
-//! calculava. Para abrir esses saves e conferir o hash, o núcleo em Rust
-//! precisa arredondar, truncar e sortear exatamente como o JavaScript fazia.
+//! The core was born in JavaScript, and old saves store the hash it computed.
+//! To open those saves and check their hash, the Rust core has to round,
+//! truncate and draw random numbers exactly as JavaScript did.
 
 use serde_json::Value;
 
-/// `Math.round`: arredonda para o inteiro mais próximo; empate vai para +∞.
+/// `Math.round`: rounds to the nearest integer; ties go towards +∞.
 pub fn round(x: f64) -> f64 {
     let f = x.floor();
     if x - f >= 0.5 {
@@ -33,9 +33,9 @@ pub fn to_uint32(x: f64) -> u32 {
     modulo_2_32(x)
 }
 
-/// Sorteio determinístico (mulberry32). O estado do gerador mora num número
-/// guardado no próprio mundo, então salvar o mundo salva também a sorte.
-pub fn sortear(rng: &mut i64) -> u32 {
+/// Deterministic random draw (mulberry32). The generator state is a number
+/// stored in the world itself, so saving the world also saves its luck.
+pub fn next_random(rng: &mut i64) -> u32 {
     let r = (*rng).wrapping_add(0x6d2b_79f5) as u32 as i32;
     *rng = r as i64;
     let mut t = r as u32;
@@ -44,7 +44,7 @@ pub fn sortear(rng: &mut i64) -> u32 {
     t ^ (t >> 14)
 }
 
-/// Verdadeiro no sentido do JavaScript (`if (v)`).
+/// Truthy in the JavaScript sense (`if (v)`).
 pub fn truthy(v: Option<&Value>) -> bool {
     match v {
         None | Some(Value::Null) => false,
@@ -55,18 +55,18 @@ pub fn truthy(v: Option<&Value>) -> bool {
     }
 }
 
-/// Número, se o valor for um número.
+/// The number, if the value is a number.
 pub fn num(v: Option<&Value>) -> Option<f64> {
     v.and_then(Value::as_f64)
 }
 
-/// Texto, se o valor for um texto não vazio (`if (v)` com string).
-pub fn texto(v: Option<&Value>) -> Option<&str> {
+/// The text, if the value is a non-empty string (`if (v)` on a string).
+pub fn nonempty_str(v: Option<&Value>) -> Option<&str> {
     v.and_then(Value::as_str).filter(|s| !s.is_empty())
 }
 
-/// Primeira letra minúscula, como `minusc` do protótipo.
-pub fn minusc(s: &str) -> String {
+/// First letter in lower case, like the prototype's `minusc`.
+pub fn lower_first(s: &str) -> String {
     let mut c = s.chars();
     match c.next() {
         Some(p) => p.to_lowercase().chain(c).collect(),
@@ -74,8 +74,8 @@ pub fn minusc(s: &str) -> String {
     }
 }
 
-/// Hash FNV-1a de 32 bits sobre as unidades UTF-16 do texto, como o
-/// `hashEstado` do protótipo (que usava `charCodeAt`).
+/// 32-bit FNV-1a hash over the UTF-16 units of the text, like the
+/// prototype's `hashEstado` (which used `charCodeAt`).
 pub fn fnv_utf16(txt: &str) -> String {
     let mut h: u32 = 0x811c_9dc5;
     for u in txt.encode_utf16() {
@@ -86,11 +86,11 @@ pub fn fnv_utf16(txt: &str) -> String {
 }
 
 #[cfg(test)]
-mod testes {
+mod tests {
     use super::*;
 
     #[test]
-    fn round_como_javascript() {
+    fn round_like_javascript() {
         assert_eq!(round(2.5), 3.0);
         assert_eq!(round(-2.5), -2.0);
         assert_eq!(round(0.49999999999999994), 0.0);
@@ -98,7 +98,7 @@ mod testes {
     }
 
     #[test]
-    fn inteiros_de_32_bits() {
+    fn integers_of_32_bits() {
         assert_eq!(to_uint32(-1.0), 4_294_967_295);
         assert_eq!(to_int32(4_294_967_295.0), -1);
         assert_eq!(to_int32(2026.7), 2026);
@@ -106,18 +106,18 @@ mod testes {
     }
 
     #[test]
-    fn mulberry32_igual_ao_javascript() {
-        // valores tirados do protótipo: s = {rng: 1}; sortear(s) três vezes
+    fn mulberry32_matches_javascript() {
+        // values taken from the prototype: s = {rng: 1}; sortear(s) three times
         let mut r = 1;
-        assert_eq!(sortear(&mut r), 2_693_262_067);
-        assert_eq!(sortear(&mut r), 11_749_833);
-        assert_eq!(sortear(&mut r), 2_265_367_787);
+        assert_eq!(next_random(&mut r), 2_693_262_067);
+        assert_eq!(next_random(&mut r), 11_749_833);
+        assert_eq!(next_random(&mut r), 2_265_367_787);
         assert_eq!(r, 1_199_730_144);
     }
 
     #[test]
-    fn minusculas() {
-        assert_eq!(minusc("Árvore adulta"), "árvore adulta");
-        assert_eq!(minusc(""), "");
+    fn lower_case_first_letter() {
+        assert_eq!(lower_first("Árvore adulta"), "árvore adulta");
+        assert_eq!(lower_first(""), "");
     }
 }

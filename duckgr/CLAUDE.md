@@ -30,7 +30,7 @@ Workspace Rust (nomes provisórios, prefixo `duckgr-`):
 
 Não comece pelo que é "depois". Ordem: `duckgr-sim` com testes, depois `duckgr-data`, depois wasm + cliente web.
 
-**Hoje:** o núcleo está em Rust (`crates/duckgr-sim`, com pacote, gerador, simulação, jogador e comandos) e roda no navegador por WebAssembly (`crates/duckgr-wasm`, ponte em `web/plataforma/nucleo.js`). A interface continua em JavaScript puro em `web/` (mundos em `web/jogos/`), com testes em `testes/` (`npm test`, que compila o wasm antes) e publicação no GitHub Pages a cada merge na `main`. Os pacotes ainda são escritos em JavaScript e chegam ao núcleo como JSON; o `duckgr-data` (RON ou TOML) ainda não existe. O estado em JSON e o hash são idênticos aos do protótipo em JavaScript, para que os saves antigos continuem abrindo: qualquer mudança que altere o hash de uma partida existente precisa de versão nova do pacote ou do formato do save.
+**Hoje:** o núcleo está em Rust (`crates/duckgr-sim`, com pacote, gerador, simulação, jogador e comandos) e roda no navegador por WebAssembly (`crates/duckgr-wasm`, ponte em `web/platform/core.js`). A interface continua em JavaScript puro em `web/` (mundos em `web/games/`, idiomas em `web/platform/locales/`), com testes em `tests/` (`npm test`, que compila o wasm antes) e publicação no GitHub Pages a cada merge na `main`. Os pacotes ainda são escritos em JavaScript e chegam ao núcleo como JSON; o `duckgr-data` (RON ou TOML) ainda não existe. O estado em JSON e o hash são idênticos aos do protótipo em JavaScript, para que os saves antigos continuem abrindo: qualquer mudança que altere o hash de uma partida existente precisa de versão nova do pacote ou do formato do save.
 
 ## Como trabalhar
 
@@ -40,7 +40,9 @@ Não comece pelo que é "depois". Ordem: `duckgr-sim` com testes, depois `duckgr
 - Cada regra de jogo nova vem com teste que reproduz a regra a partir de uma sequência de comandos.
 - Teste de determinismo: rodar o mesmo log duas vezes e comparar o hash do estado.
 - Mantenha as tarefas pequenas: algo que o Davi consiga testar no fim de uma sessão de duas horas.
-- Escreva documentação e mensagens para usuários em português. Identificadores de código em inglês.
+- **Código em inglês** (regra do Rodrigo): identificadores, nomes de arquivos e pastas, comentários, nomes de testes e mensagens de diagnóstico. Exceção: formatos já gravados em saves e pacotes (chaves do JSON do estado e do save, campos dos comandos, chaves e ids dos pacotes, chaves do `localStorage`) ficam como estão; mudá-los exige versão nova do formato, com migração.
+- **Textos para o usuário internacionalizados** (regra do Rodrigo): nenhum texto de interface fixo no código. Todo texto vai para os arquivos de idioma (`web/platform/locales/pt-BR.js` e `en.js`, no mínimo), com as mesmas chaves em todos; o teste `tests/i18n.test.js` confere. O núcleo não escreve frases: devolve mensagens com chave e argumentos (`crates/duckgr-sim/src/message.rs`), e a interface monta o texto. Textos do conteúdo de um mundo ficam no pacote, no idioma base, com traduções em `web/games/<mundo>/locales/`. O idioma vem do navegador e pode ser trocado em Configurações.
+- Documentação, descrições de PR e conversa com a equipe: em português.
 
 ## Fora de escopo por enquanto
 

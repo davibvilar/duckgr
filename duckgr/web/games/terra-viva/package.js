@@ -1,9 +1,13 @@
-// Pacote do mundo "Terra Viva" (nome provisório): a primeira era do jogo
-// industrial e ecológico. Só dados. O núcleo da plataforma não conhece
-// nada daqui: árvores, minérios, fornalhas e poluição existem só neste arquivo.
+// Package of the "Terra Viva" world (working name): the first era of the
+// industrial and ecological game. Data only. The platform core knows
+// nothing from here: trees, ores, furnaces and pollution exist only in
+// this file.
 //
-// Unidades: tempos em segundos (o núcleo converte para ticks); poluição em
-// centésimos de unidade por segundo, para tudo ficar em números inteiros.
+// The package is written in Portuguese, the game's base language: the keys
+// are the package format, and the texts are translated in locales/.
+//
+// Units: times in seconds (the core converts them to ticks); pollution in
+// hundredths of a unit per second, so everything stays in integers.
 
 export default {
   id: "terra-viva",
@@ -23,9 +27,9 @@ export default {
       cobertura: "grama",
       rios: [{ substrato: "agua", vau: "vau", vaus: 2, posicao: 0.2, largura: 2 }],
       manchas: [
-        // floresta: manchas de árvores adultas e jovens
+        // forest: patches of adult and young trees
         { camada: "cobertura", tipos: { adulta: 3, jovem: 1 }, porArea: 1 / 55, raio: [2, 4], preenche: 75, escalaPor: "floresta" },
-        // depósitos em lugares parecidos em todo mapa, para a partida ser justa
+        // deposits in similar places on every map, so the game is fair
         { camada: "deposito", tipo: "ferro", em: [0.55, 0.3], raio: 2, qtd: [60, 120] },
         { camada: "deposito", tipo: "carvao", em: [0.42, 0.7], raio: 2, qtd: [60, 120] },
         { camada: "deposito", tipo: "pedra", em: [0.33, 0.28], raio: 1, qtd: [40, 80] },
@@ -34,16 +38,16 @@ export default {
     },
   },
 
-  // valores usados quando o jogador não muda nada (o jogo padrão)
+  // values used when the player changes nothing (the default game)
   padrao: { semente: 2026, largura: 40, altura: 24, floresta: 1, recursosIniciais: 1 },
 
-  // O jogador anda a pé por enquanto. Veículos, no futuro, mudam a velocidade.
+  // The player walks for now. Vehicles, in the future, change the speed.
   jogador: {
     nome: "Pato",
-    passagem: "pedestre",       // classe de passagem usada pelas camadas
-    celulasPorSegundo: 4,       // a pé
-    alcance: 1,                 // age nas 8 células em volta
-    minerarVezes: 5,            // quantas vezes "minerar" repete por ordem
+    passagem: "pedestre",       // passage class used by the layers
+    celulasPorSegundo: 4,       // on foot
+    alcance: 1,                 // acts on the 8 cells around
+    minerarVezes: 5,            // how many times "minerar" repeats per order
     duracoes: { colher: 1, minerar: 0.5, plantar: 0.4, construir: 0.5, desmontar: 0.5, recolher: 0.2, abastecer: 0.2, fornecer: 0.2 },
   },
 
@@ -109,7 +113,7 @@ export default {
     ciencia: { nome: "Pacote de ciência", entra: { "placa-cobre": 1, engrenagem: 1 }, sai: { ciencia: 1 }, mao: true },
   },
 
-  // Elementos = protótipo + componentes. O núcleo só executa componentes.
+  // Elements = prototype + components. The core only runs components.
   elementos: {
     mineradora: {
       nome: "Mineradora a carvão", custo: { "placa-ferro": 5, pedra: 5 }, exige: "deposito",

@@ -1,6 +1,6 @@
 [package]
 name = "duckgr-wasm"
-description = "O núcleo do DuckGR compilado para WebAssembly, com uma interface mínima em JSON."
+description = "The DuckGR core compiled to WebAssembly, with a minimal JSON interface."
 edition.workspace = true
 version.workspace = true
 publish.workspace = true

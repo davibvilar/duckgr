@@ -1,6 +1,6 @@
-# Roda os testes em todo pull request e em todo push.
-# Quando algo entra na main, publica o jogo no GitHub Pages.
-name: Testes e publicação
+# Runs the tests on every pull request and every push.
+# When something lands on main, publishes the game on GitHub Pages.
+name: Tests and deploy
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# O projeto mora na pasta duckgr/ do repositório.
+# The project lives in the repository's duckgr/ folder.
 defaults:
   run:
     working-directory: duckgr
@@ -21,7 +21,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  testes:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,15 +35,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Formatação do Rust
+      - name: Rust formatting
         run: cargo fmt --all --check
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
-      - name: Testes do núcleo em Rust (regras, saves antigos, orçamento de desempenho)
+      - name: Rust core tests (rules, old saves, performance budget)
         run: cargo test --all
-      - name: Testes com o núcleo em WebAssembly (compila o wasm antes)
+      - name: Tests with the WebAssembly core (builds the wasm first)
         run: npm test
-      - name: Montar o site
+      - name: Build the site
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
           mkdir -p _site
@@ -55,8 +55,8 @@ jobs:
         with:
           path: duckgr/_site
 
-  publicar:
-    needs: testes
+  deploy:
+    needs: tests
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

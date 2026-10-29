@@ -1,74 +1,78 @@
-//! Núcleo da simulação do DuckGR.
+//! Simulation core of DuckGR.
 //!
-//! O núcleo não sabe que existe floresta, fornalha ou poluição. Ele conhece:
-//! células com camadas (substrato, depósito, cobertura, ocupante), elementos
-//! feitos de componentes (energia, extração, processo, entrega, emissão),
-//! campos por chunk, eras, tecnologias, missões e comandos. Todo o conteúdo
-//! vem do pacote do mundo.
+//! The core doesn't know that forests, furnaces or pollution exist. It
+//! knows: cells with layers (substrate, deposit, cover, occupant), elements
+//! made of components (energy, extraction, process, delivery, emission),
+//! fields per chunk, eras, technologies, missions and commands. All content
+//! comes from the world package.
 //!
-//! Regras de determinismo: tick fixo, só aritmética inteira no estado,
-//! sorteios pelo gerador do próprio estado, nada de relógio de parede.
-//! Mesmo pacote + mesma configuração + mesmos comandos = mesmo hash.
+//! Determinism rules: fixed tick, only integer arithmetic in the state,
+//! random draws from the state's own generator, no wall clock.
+//! Same package + same configuration + same commands = same hash.
+//!
+//! Interface text is not written here: the core speaks in messages (key +
+//! arguments, see `message`) and the interface renders them in the
+//! player's language.
 
-pub mod estado;
-pub mod gerador;
-pub mod jogador;
+pub mod generator;
 pub mod js;
-pub mod pacote;
+pub mod message;
+pub mod package;
+pub mod player;
+pub mod state;
 
 use std::collections::VecDeque;
 
 use serde_json::{json, Value};
 
-pub use estado::Estado;
-pub use pacote::{compilar, Pacote};
+pub use package::{compile, Package};
+pub use state::State;
 
-use estado::{Bolsa, Jog, Missao};
-use jogador::{aceita, bolsa_mut, resposta};
-use js::{num, round, sortear, to_uint32};
-use pacote::{Id, Itens};
+use js::{next_random, num, round, to_uint32};
+use message::{items, key, list, msg, name_ref, text_ref, text_ref_or};
+use package::{Id, ItemList};
+use player::{accepts, bag_mut, reply, STOPPED_NO_FUEL, STOPPED_NO_INPUT};
+use state::{Bag, Entity, Mission, Player};
 
-/// Ticks por segundo.
+/// Ticks per second.
 pub const TPS: i64 = 30;
-pub(crate) const VIZINHOS: [(i64, i64); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
+pub(crate) const NEIGHBORS: [(i64, i64); 4] = [(1, 0), (0, 1), (-1, 0), (0, -1)];
 
-// ---------- utilidades
-pub fn chunk_de(s: &Estado, p: &Pacote, x: i64, y: i64) -> usize {
-    (x / p.chunk + (y / p.chunk) * s.cl) as usize
+// ---------- utilities
+pub fn chunk_of(s: &State, p: &Package, x: i64, y: i64) -> usize {
+    (x / p.chunk + (y / p.chunk) * s.cw) as usize
 }
 
-fn vizinho_tem(s: &Estado, p: &Pacote, x: i64, y: i64, marca: Id) -> bool {
-    VIZINHOS.iter().any(|(dx, dy)| {
-        s.dentro(x + dx, y + dy) && p.substratos[s.sub[s.idx(x + dx, y + dy)] as usize].marcas.contains(&marca)
+fn neighbor_has(s: &State, p: &Package, x: i64, y: i64, mark: Id) -> bool {
+    NEIGHBORS.iter().any(|(dx, dy)| {
+        s.inside(x + dx, y + dy) && p.substrates[s.sub[s.idx(x + dx, y + dy)] as usize].marks.contains(&mark)
     })
 }
 
-/// Quantas células têm uma cobertura com esta marca.
-pub fn contar_marca(s: &Estado, p: &Pacote, marca: &str) -> i64 {
-    let Some(m) = p.marca(marca) else { return 0 };
-    let tem: Vec<bool> = p.coberturas.iter().map(|c| c.marcas.contains(&m)).collect();
-    s.cov.iter().filter(|c| c.is_some_and(|c| tem[c as usize])).count() as i64
+/// How many cells have a cover with this mark.
+pub fn count_mark(s: &State, p: &Package, mark: &str) -> i64 {
+    let Some(m) = p.mark(mark) else { return 0 };
+    let has: Vec<bool> = p.covers.iter().map(|c| c.marks.contains(&m)).collect();
+    s.cov.iter().filter(|c| c.is_some_and(|c| has[c as usize])).count() as i64
 }
 
-pub(crate) fn tem_itens(s: &Estado, custo: &Itens) -> bool {
-    custo.iter().all(|(it, n)| s.inv.get(*it) >= *n)
+pub(crate) fn has_items(s: &State, cost: &ItemList) -> bool {
+    cost.iter().all(|(it, n)| s.inv.get(*it) >= *n)
 }
 
-pub(crate) fn faltam(s: &Estado, p: &Pacote, custo: &Itens) -> String {
-    custo
-        .iter()
-        .filter(|(it, n)| s.inv.get(*it) < *n)
-        .map(|(it, n)| format!("{} {}", n - s.inv.get(*it), p.itens[*it as usize].nome.to_lowercase()))
-        .collect::<Vec<_>>()
-        .join(", ")
+/// What is missing to pay a cost, as a message argument ("2 madeira, 1 pedra").
+pub(crate) fn missing_items(s: &State, p: &Package, cost: &ItemList) -> Value {
+    let missing: ItemList =
+        cost.iter().filter(|(it, n)| s.inv.get(*it) < *n).map(|(it, n)| (*it, n - s.inv.get(*it))).collect();
+    items(p, &missing)
 }
 
-pub(crate) fn registrar_evento(s: &mut Estado, ev: Value) {
-    s.eventos.push(ev);
+pub(crate) fn push_event(s: &mut State, ev: Value) {
+    s.events.push(ev);
 }
 
-/// Número de uma meta como o JavaScript escreveria num texto.
-fn numero_txt(v: Option<&Value>) -> String {
+/// A goal's number as JavaScript would write it in a text.
+fn number_text(v: Option<&Value>) -> String {
     match v {
         Some(Value::Number(n)) => match (n.as_i64(), n.as_f64()) {
             (Some(i), _) => i.to_string(),
@@ -81,7 +85,7 @@ fn numero_txt(v: Option<&Value>) -> String {
     }
 }
 
-fn chave_marca(m: &Value) -> String {
+fn mark_key(m: &Value) -> String {
     match m.get("marca") {
         Some(Value::String(s)) => s.clone(),
         Some(Value::Null) => "null".into(),
@@ -90,332 +94,354 @@ fn chave_marca(m: &Value) -> String {
     }
 }
 
-// ---------- estado inicial
-pub fn novo_estado(p: &Pacote, cfg: &Value) -> Result<Estado, String> {
-    let mut config = p.padrao.clone();
+// ---------- initial state
+pub fn new_state(p: &Package, cfg: &Value) -> Result<State, String> {
+    let mut config = p.defaults.clone();
     if let Some(c) = cfg.as_object() {
         for (k, v) in c {
             config.insert(k.clone(), v.clone());
         }
     }
-    let mapa = gerador::gerar_mapa(p, &config)?;
-    let (l, a) = (mapa.l, mapa.a);
-    let ch = p.chunk;
-    let (cl, ca) = ((l + ch - 1) / ch, (a + ch - 1) / ch);
+    let map = generator::generate_map(p, &config)?;
+    let (w, h) = (map.w, map.h);
+    let chunk = p.chunk;
+    let (cw, ch) = ((w + chunk - 1) / chunk, (h + chunk - 1) / chunk);
     let mult = num(config.get("recursosIniciais")).unwrap_or(1.0);
-    let inv = Bolsa(p.inicio_inventario.iter().map(|(it, v)| (*it, round(v * mult) as i64)).collect());
-    let semente = to_uint32(num(config.get("semente")).unwrap_or(f64::NAN));
-    let metas = match config.get("metas") {
+    let inv = Bag(p.start_inventory.iter().map(|(it, v)| (*it, round(v * mult) as i64)).collect());
+    let seed = to_uint32(num(config.get("semente")).unwrap_or(f64::NAN));
+    let goals = match config.get("metas") {
         Some(Value::Array(m)) => m.clone(),
-        Some(v) if !v.is_null() => return Err("\"metas\" precisa ser uma lista".into()),
-        _ => p.metas.as_array().cloned().unwrap_or_default(),
+        Some(v) if !v.is_null() => return Err("\"metas\" must be a list".into()),
+        _ => p.goals.as_array().cloned().unwrap_or_default(),
     };
-    let n = (l * a) as usize;
-    let mut s = Estado {
+    let n = (w * h) as usize;
+    let mut s = State {
         tick: 0,
-        rng: if semente == 0 { 1 } else { semente as i64 },
-        l,
-        a,
-        cl,
-        ca,
-        sub: mapa.sub,
-        dep: mapa.dep,
-        dep_qtd: mapa.dep_qtd,
-        cov: mapa.cov,
-        cres: vec![0; n],
+        rng: if seed == 0 { 1 } else { seed as i64 },
+        w,
+        h,
+        cw,
+        ch,
+        sub: map.sub,
+        dep: map.dep,
+        dep_amount: map.dep_amount,
+        cov: map.cov,
+        growth: vec![0; n],
         occ: vec![0; n],
-        ents: Vec::new(),
-        prox: 1,
+        entities: Vec::new(),
+        next_id: 1,
         inv,
-        prod: Bolsa::default(),
-        campos: vec![vec![0; (cl * ca) as usize]; p.campos.len()],
+        produced: Bag::default(),
+        fields: vec![vec![0; (cw * ch) as usize]; p.fields.len()],
         techs: Vec::new(),
         era: 1,
-        liberados: p.inicio_liberados.clone(),
+        unlocked: p.start_unlocked.clone(),
         log: VecDeque::new(),
-        ultimo_dano: -1_000_000_000,
-        missao: Missao { estado: "andamento".into(), metas, refs: Vec::new() },
-        jog: Jog::default(),
-        eventos: Vec::new(),
+        last_damage: -1_000_000_000,
+        mission: Mission { status: "andamento".into(), goals, refs: Vec::new() },
+        player: Player::default(),
+        events: Vec::new(),
     };
-    // o jogador é um agente: fica fora da célula, com fila de ordens e caminho
-    let (x, y) = jogador::posicao_inicial(&s, p);
-    s.jog.x = x;
-    s.jog.y = y;
-    for m in s.missao.metas.clone() {
-        if m.get("tipo").and_then(Value::as_str) == Some("cobertura") {
-            let k = chave_marca(&m);
-            let n = contar_marca(&s, p, &k);
-            match s.missao.refs.iter_mut().find(|(r, _)| *r == k) {
+    // the player is an agent: it stands outside the cell, with an order queue and a path
+    let (x, y) = player::start_position(&s, p);
+    s.player.x = x;
+    s.player.y = y;
+    for g in s.mission.goals.clone() {
+        if g.get("tipo").and_then(Value::as_str) == Some("cobertura") {
+            let k = mark_key(&g);
+            let n = count_mark(&s, p, &k);
+            match s.mission.refs.iter_mut().find(|(r, _)| *r == k) {
                 Some(r) => r.1 = n,
-                None => s.missao.refs.push((k, n)),
+                None => s.mission.refs.push((k, n)),
             }
         }
     }
-    let abertura = p.abertura.clone().unwrap_or_else(|| "O mundo começou.".into());
-    s.registrar(abertura, "");
+    match p.opening.clone() {
+        Some(text) => s.record(text, "", text_ref(&["missao", "abertura"])),
+        None => s.record("O mundo começou.", "", key("log.worldStarted")),
+    }
     Ok(s)
 }
 
-// ---------- passo da simulação (um tick)
-pub fn passo(s: &mut Estado, p: &Pacote) {
-    jogador::passo_jogador(s, p);
-    for k in 0..s.ents.len() {
-        passo_elemento(s, p, k);
+// ---------- simulation step (one tick)
+pub fn step(s: &mut State, p: &Package) {
+    player::player_step(s, p);
+    for k in 0..s.entities.len() {
+        element_step(s, p, k);
     }
     s.tick += 1;
     if s.tick % TPS == 0 {
-        por_segundo(s, p);
+        every_second(s, p);
     }
 }
 
-fn energia(s: &mut Estado, p: &Pacote, k: usize) -> bool {
-    let pr = &p.elementos[s.ents[k].p as usize];
-    let Some(g) = pr.consumo else { return true };
-    let e = &mut s.ents[k];
-    if e.queima < g {
-        let Some(comb) = e.comb.primeiro() else {
-            definir_parado(e, "Sem combustível");
+fn burn_fuel(s: &mut State, p: &Package, k: usize) -> bool {
+    let proto = &p.elements[s.entities[k].proto as usize];
+    let Some(g) = proto.consumption else { return true };
+    let e = &mut s.entities[k];
+    if e.burn < g {
+        let Some(fuel) = e.fuel.first() else {
+            set_stopped(e, STOPPED_NO_FUEL, || key("stopped.noFuel"));
             return false;
         };
-        e.comb.por(comb, -1);
-        e.queima += p.itens[comb as usize].combustivel;
+        e.fuel.add(fuel, -1);
+        e.burn += p.items[fuel as usize].fuel;
     }
-    e.queima -= g;
+    e.burn -= g;
     true
 }
 
-fn definir_parado(e: &mut estado::Ent, msg: &str) {
-    if e.parado != msg {
-        e.parado.clear();
-        e.parado.push_str(msg);
+/// Marks why the element stopped: the frozen text (hash) and the message (interface).
+fn set_stopped(e: &mut Entity, text: &str, message: impl FnOnce() -> Value) {
+    if e.stopped != text {
+        e.stopped.clear();
+        e.stopped.push_str(text);
+        e.stopped_msg = message();
     }
 }
 
-fn passo_elemento(s: &mut Estado, p: &Pacote, k: usize) {
-    let pr = &p.elementos[s.ents[k].p as usize];
-    s.ents[k].parado.clear();
-    let (x, y) = (s.ents[k].x, s.ents[k].y);
-    // componente "entrega": passa um item por tick para um vizinho que aceite
-    if pr.entrega {
-        if let Some(item) = s.ents[k].sai.primeiro() {
-            for (dx, dy) in VIZINHOS {
-                let Some(v) = s.ent_em(x + dx, y + dy) else { continue };
-                if let Some(slot) = aceita(p, &s.ents[v], item) {
-                    s.ents[k].sai.por(item, -1);
-                    bolsa_mut(&mut s.ents[v], slot).por(item, 1);
+fn clear_stopped(e: &mut Entity) {
+    e.stopped.clear();
+    e.stopped_msg = Value::Null;
+}
+
+fn element_step(s: &mut State, p: &Package, k: usize) {
+    let proto = &p.elements[s.entities[k].proto as usize];
+    clear_stopped(&mut s.entities[k]);
+    let (x, y) = (s.entities[k].x, s.entities[k].y);
+    // "delivery" component: passes one item per tick to a neighbor that accepts it
+    if proto.delivers {
+        if let Some(item) = s.entities[k].output.first() {
+            for (dx, dy) in NEIGHBORS {
+                let Some(v) = s.entity_at(x + dx, y + dy) else { continue };
+                if let Some(slot) = accepts(p, &s.entities[v], item) {
+                    s.entities[k].output.add(item, -1);
+                    bag_mut(&mut s.entities[v], slot).add(item, 1);
                     break;
                 }
             }
         }
     }
-    // componente "extrai": tira itens do depósito sob o elemento
-    if let Some(ticks) = pr.extrai_ticks {
+    // "extract" component: takes items from the deposit under the element
+    if let Some(ticks) = proto.extract_ticks {
         let i = s.idx(x, y);
         match s.dep[i] {
-            None => definir_parado(&mut s.ents[k], "Depósito esgotado"),
-            Some(_) if pr.inv.saida.is_some_and(|c| s.ents[k].sai.total() >= c) => {
-                definir_parado(&mut s.ents[k], "Saída cheia")
+            None => set_stopped(&mut s.entities[k], "Depósito esgotado", || key("stopped.depleted")),
+            Some(_) if proto.inv.output.is_some_and(|c| s.entities[k].output.total() >= c) => {
+                set_stopped(&mut s.entities[k], "Saída cheia", || key("stopped.outputFull"))
             }
             Some(d) => {
-                if energia(s, p, k) {
-                    let e = &mut s.ents[k];
-                    e.ativo += 1;
-                    e.prog += 1;
-                    if e.prog >= ticks {
-                        e.prog = 0;
-                        let item = p.depositos[d as usize].item;
-                        e.sai.por(item, 1);
-                        s.prod.por(item, 1);
-                        s.dep_qtd[i] -= 1;
-                        if s.dep_qtd[i] <= 0 {
+                if burn_fuel(s, p, k) {
+                    let e = &mut s.entities[k];
+                    e.active += 1;
+                    e.progress += 1;
+                    if e.progress >= ticks {
+                        e.progress = 0;
+                        let item = p.deposits[d as usize].item;
+                        e.output.add(item, 1);
+                        s.produced.add(item, 1);
+                        s.dep_amount[i] -= 1;
+                        if s.dep_amount[i] <= 0 {
                             s.dep[i] = None;
-                            s.dep_qtd[i] = 0;
-                            let nome = p.depositos[d as usize].nome.to_lowercase();
-                            s.registrar(format!("Um depósito de {nome} se esgotou em ({x},{y})."), "");
+                            s.dep_amount[i] = 0;
+                            let deposit = &p.deposits[d as usize];
+                            let text =
+                                format!("Um depósito de {} se esgotou em ({x},{y}).", deposit.name.to_lowercase());
+                            let args = json!({ "deposit": name_ref("depositos", &deposit.id), "x": x, "y": y });
+                            s.record(text, "", msg("log.depositDepleted", args));
                         }
                     }
                 }
             }
         }
     }
-    // componente "processo": transforma entradas em saídas segundo receitas
-    if let Some(procs) = &pr.processo {
-        if s.ents[k].rec.is_none() {
-            let e = &s.ents[k];
-            let cand = procs
+    // "process" component: turns inputs into outputs following recipes
+    if let Some(recipes) = &proto.process {
+        if s.entities[k].recipe.is_none() {
+            let e = &s.entities[k];
+            let candidate = recipes
                 .iter()
-                .map(|r| (*r, &p.receitas[*r as usize]))
-                .find(|(_, r)| r.entra.iter().all(|(it, n)| e.ent.get(*it) >= *n));
-            match cand {
-                None => definir_parado(&mut s.ents[k], "Sem entrada"),
-                Some((_, r)) if r.exige_vizinho.is_some_and(|m| !vizinho_tem(s, p, x, y, m)) => {
-                    let aviso = r.exige_aviso.as_deref().unwrap_or("Condição do ambiente não atendida");
-                    definir_parado(&mut s.ents[k], aviso)
+                .map(|r| (*r, &p.recipes[*r as usize]))
+                .find(|(_, r)| r.inputs.iter().all(|(it, n)| e.input.get(*it) >= *n));
+            match candidate {
+                None => set_stopped(&mut s.entities[k], STOPPED_NO_INPUT, || key("stopped.noInput")),
+                Some((_, r)) if r.needs_neighbor.is_some_and(|m| !neighbor_has(s, p, x, y, m)) => {
+                    match &r.needs_warning {
+                        Some(w) => set_stopped(&mut s.entities[k], w, || {
+                            text_ref_or(&["receitas", &r.id, "exige", "aviso"], w)
+                        }),
+                        None => set_stopped(&mut s.entities[k], "Condição do ambiente não atendida", || {
+                            key("stopped.condition")
+                        }),
+                    }
                 }
                 Some((_, r))
-                    if pr.inv.saida.is_some_and(|c| e.sai.total() + r.sai.iter().map(|(_, n)| n).sum::<i64>() > c) =>
+                    if proto
+                        .inv
+                        .output
+                        .is_some_and(|c| e.output.total() + r.outputs.iter().map(|(_, n)| n).sum::<i64>() > c) =>
                 {
-                    definir_parado(&mut s.ents[k], "Saída cheia")
+                    set_stopped(&mut s.entities[k], "Saída cheia", || key("stopped.outputFull"))
                 }
                 Some((id, r)) => {
-                    let e = &mut s.ents[k];
-                    for (it, n) in &r.entra {
-                        e.ent.por(*it, -n);
+                    let e = &mut s.entities[k];
+                    for (it, n) in &r.inputs {
+                        e.input.add(*it, -n);
                     }
-                    e.rec = Some(id);
-                    e.prog = 0;
+                    e.recipe = Some(id);
+                    e.progress = 0;
                 }
             }
         }
-        if let Some(rec) = s.ents[k].rec {
-            if energia(s, p, k) {
-                let r = &p.receitas[rec as usize];
-                let e = &mut s.ents[k];
-                e.ativo += 1;
-                e.prog += 1;
-                if e.prog >= r.ticks {
-                    for (it, n) in &r.sai {
-                        e.sai.por(*it, *n);
-                        s.prod.por(*it, *n);
+        if let Some(rec) = s.entities[k].recipe {
+            if burn_fuel(s, p, k) {
+                let r = &p.recipes[rec as usize];
+                let e = &mut s.entities[k];
+                e.active += 1;
+                e.progress += 1;
+                if e.progress >= r.ticks {
+                    for (it, n) in &r.outputs {
+                        e.output.add(*it, *n);
+                        s.produced.add(*it, *n);
                     }
-                    e.rec = None;
-                    e.prog = 0;
+                    e.recipe = None;
+                    e.progress = 0;
                 }
             }
         }
     }
 }
 
-// ---------- o que acontece uma vez por segundo: campos, crescimento, missão
-fn por_segundo(s: &mut Estado, p: &Pacote) {
-    let ch = p.chunk;
-    let (l, a, cl, ca) = (s.l, s.a, s.cl, s.ca);
-    for (f, campo) in p.campos.iter().enumerate() {
-        let nk = s.campos[f].len();
-        // fontes: elementos que trabalharam neste segundo
-        for k in 0..s.ents.len() {
-            let e = &s.ents[k];
-            let em = p.elementos[e.p as usize].emite[f];
+// ---------- what happens once per second: fields, growth, mission
+fn every_second(s: &mut State, p: &Package) {
+    let chunk = p.chunk;
+    let (w, h, cw, ch) = (s.w, s.h, s.cw, s.ch);
+    for (f, field) in p.fields.iter().enumerate() {
+        let nk = s.fields[f].len();
+        // sources: elements that worked during this second
+        for k in 0..s.entities.len() {
+            let e = &s.entities[k];
+            let em = p.elements[e.proto as usize].emits[f];
             if em != 0.0 && !em.is_nan() {
-                let c = chunk_de(s, p, e.x, e.y);
-                s.campos[f][c] += ((em * e.ativo as f64) / TPS as f64).floor() as i64;
+                let c = chunk_of(s, p, e.x, e.y);
+                s.fields[f][c] += ((em * e.active as f64) / TPS as f64).floor() as i64;
             }
         }
-        // sumidouros: coberturas que absorvem
-        let mut abs = vec![0i64; nk];
-        for y in 0..a {
-            for x in 0..l {
+        // sinks: covers that absorb
+        let mut absorbed = vec![0i64; nk];
+        for y in 0..h {
+            for x in 0..w {
                 if let Some(c) = s.cov[s.idx(x, y)] {
-                    let q = p.coberturas[c as usize].absorve[f];
+                    let q = p.covers[c as usize].absorbs[f];
                     if q != 0 {
-                        abs[chunk_de(s, p, x, y)] += q;
+                        absorbed[chunk_of(s, p, x, y)] += q;
                     }
                 }
             }
         }
-        let v = &mut s.campos[f];
+        let v = &mut s.fields[f];
         for k in 0..nk {
-            v[k] = (v[k] - abs[k]).max(0);
+            v[k] = (v[k] - absorbed[k]).max(0);
         }
-        // difusão em duas fases: calcula tudo, depois aplica
+        // spreading in two phases: compute everything, then apply
         let mut delta = vec![0i64; nk];
-        for cy in 0..ca {
-            for cx in 0..cl {
-                let k = (cx + cy * cl) as usize;
-                if v[k] as f64 <= campo.difusao_limiar {
+        for cy in 0..ch {
+            for cx in 0..cw {
+                let k = (cx + cy * cw) as usize;
+                if v[k] as f64 <= field.spread_threshold {
                     continue;
                 }
-                let parte = (v[k] as f64 / campo.difusao_divisor).floor() as i64;
-                for (dx, dy) in VIZINHOS {
+                let share = (v[k] as f64 / field.spread_divisor).floor() as i64;
+                for (dx, dy) in NEIGHBORS {
                     let (nx, ny) = (cx + dx, cy + dy);
-                    if nx < 0 || ny < 0 || nx >= cl || ny >= ca {
+                    if nx < 0 || ny < 0 || nx >= cw || ny >= ch {
                         continue;
                     }
-                    delta[k] -= parte;
-                    delta[(nx + ny * cl) as usize] += parte;
+                    delta[k] -= share;
+                    delta[(nx + ny * cw) as usize] += share;
                 }
             }
         }
         for k in 0..nk {
             v[k] += delta[k];
         }
-        // dano: acima do limiar, a cobertura regride
-        if let Some(dano) = &campo.dano {
+        // damage: above the threshold, the cover regresses
+        if let Some(damage) = &field.damage {
             for k in 0..nk {
-                if s.campos[f][k] as f64 <= dano.limiar || (sortear(&mut s.rng) as f64 % dano.chance) != 0.0 {
+                if s.fields[f][k] as f64 <= damage.threshold || (next_random(&mut s.rng) as f64 % damage.chance) != 0.0
+                {
                     continue;
                 }
-                let (cx, cy) = ((k as i64) % cl, (k as i64) / cl);
-                let mut alvos = Vec::new();
-                for y in cy * ch..a.min(cy * ch + ch) {
-                    for x in cx * ch..l.min(cx * ch + ch) {
+                let (cx, cy) = ((k as i64) % cw, (k as i64) / cw);
+                let mut targets = Vec::new();
+                for y in cy * chunk..h.min(cy * chunk + chunk) {
+                    for x in cx * chunk..w.min(cx * chunk + chunk) {
                         let i = s.idx(x, y);
-                        if s.cov[i].is_some_and(|c| p.coberturas[c as usize].regride.is_some()) {
-                            alvos.push(i);
+                        if s.cov[i].is_some_and(|c| p.covers[c as usize].regresses.is_some()) {
+                            targets.push(i);
                         }
                     }
                 }
-                if alvos.is_empty() {
+                if targets.is_empty() {
                     continue;
                 }
-                let i = alvos[(sortear(&mut s.rng) as usize) % alvos.len()];
-                let c = s.cov[i].expect("alvo tem cobertura");
-                s.cov[i] = p.coberturas[c as usize].regride.expect("alvo regride");
-                s.cres[i] = 0;
-                if s.tick - s.ultimo_dano > 15 * TPS {
-                    s.ultimo_dano = s.tick;
-                    s.registrar(dano.aviso.clone(), "ruim");
+                let i = targets[(next_random(&mut s.rng) as usize) % targets.len()];
+                let c = s.cov[i].expect("target has a cover");
+                s.cov[i] = p.covers[c as usize].regresses.expect("target regresses");
+                s.growth[i] = 0;
+                if s.tick - s.last_damage > 15 * TPS {
+                    s.last_damage = s.tick;
+                    s.record(damage.warning.clone(), "ruim", text_ref(&["campos", &field.id, "dano", "aviso"]));
                 }
             }
         }
     }
-    for y in 0..a {
-        for x in 0..l {
+    for y in 0..h {
+        for x in 0..w {
             let i = s.idx(x, y);
-            let Some(cr) = s.cov[i].and_then(|c| p.coberturas[c as usize].cresce.as_ref()) else { continue };
-            let k = chunk_de(s, p, x, y);
-            if p.campos
+            let Some(g) = s.cov[i].and_then(|c| p.covers[c as usize].growth.as_ref()) else { continue };
+            let k = chunk_of(s, p, x, y);
+            if p.fields
                 .iter()
                 .enumerate()
-                .any(|(f, c)| c.inibe != 0.0 && !c.inibe.is_nan() && s.campos[f][k] as f64 > c.inibe)
+                .any(|(f, c)| c.inhibits != 0.0 && !c.inhibits.is_nan() && s.fields[f][k] as f64 > c.inhibits)
             {
                 continue;
             }
-            s.cres[i] += if cr.bonus_vizinho.is_some_and(|m| vizinho_tem(s, p, x, y, m)) { 2 } else { 1 };
-            if s.cres[i] as f64 >= cr.segundos {
-                s.cov[i] = cr.para;
-                s.cres[i] = 0;
+            s.growth[i] += if g.neighbor_bonus.is_some_and(|m| neighbor_has(s, p, x, y, m)) { 2 } else { 1 };
+            if s.growth[i] as f64 >= g.seconds {
+                s.cov[i] = g.into;
+                s.growth[i] = 0;
             }
         }
     }
-    for e in s.ents.iter_mut() {
-        e.ativo = 0;
+    for e in s.entities.iter_mut() {
+        e.active = 0;
     }
-    avaliar_missao(s, p);
+    check_mission(s, p);
 }
 
-/// Progresso de cada meta da missão: as metas como vieram, com o andamento.
-pub fn progresso_missao(s: &Estado, p: &Pacote) -> Vec<Value> {
-    s.missao
-        .metas
+/// Progress of each mission goal: the goals as they came, with how far along they are.
+pub fn mission_progress(s: &State, p: &Package) -> Vec<Value> {
+    s.mission
+        .goals
         .iter()
-        .map(|m| {
-            let mut r = m.as_object().cloned().unwrap_or_default();
-            if m.get("tipo").and_then(Value::as_str) == Some("producao") {
-                let item = m.get("item").and_then(Value::as_str).and_then(|i| p.item(i));
-                let feito = item.map_or(0, |i| s.prod.get(i));
-                let ok = num(m.get("quantidade")).is_some_and(|q| feito as f64 >= q);
-                r.insert("feito".into(), feito.into());
+        .map(|g| {
+            let mut r = g.as_object().cloned().unwrap_or_default();
+            if g.get("tipo").and_then(Value::as_str) == Some("producao") {
+                let item = g.get("item").and_then(Value::as_str).and_then(|i| p.item(i));
+                let done = item.map_or(0, |i| s.produced.get(i));
+                let ok = num(g.get("quantidade")).is_some_and(|q| done as f64 >= q);
+                r.insert("feito".into(), done.into());
                 r.insert("ok".into(), ok.into());
             } else {
-                let k = chave_marca(m);
-                let atual = contar_marca(s, p, &k);
-                let rf = s.missao.refs.iter().find(|(r, _)| *r == k).map_or(0, |(_, n)| *n);
-                let rf = if rf == 0 { 1 } else { rf };
-                let pct = (atual * 100).div_euclid(rf);
-                let ok = num(m.get("minimoPct")).is_some_and(|q| pct as f64 >= q);
-                r.insert("atual".into(), atual.into());
+                let k = mark_key(g);
+                let now = count_mark(s, p, &k);
+                let start = s.mission.refs.iter().find(|(r, _)| *r == k).map_or(0, |(_, n)| *n);
+                let start = if start == 0 { 1 } else { start };
+                let pct = (now * 100).div_euclid(start);
+                let ok = num(g.get("minimoPct")).is_some_and(|q| pct as f64 >= q);
+                r.insert("atual".into(), now.into());
                 r.insert("pct".into(), pct.into());
                 r.insert("ok".into(), ok.into());
             }
@@ -424,120 +450,132 @@ pub fn progresso_missao(s: &Estado, p: &Pacote) -> Vec<Value> {
         .collect()
 }
 
-fn avaliar_missao(s: &mut Estado, p: &Pacote) {
-    if s.missao.estado != "andamento" {
+fn check_mission(s: &mut State, p: &Package) {
+    if s.mission.status != "andamento" {
         return;
     }
-    let prog = progresso_missao(s, p);
-    let ok = |m: &Value| m.get("ok") == Some(&Value::Bool(true));
-    let falha = prog.iter().find(|m| m.get("tipo").and_then(Value::as_str) == Some("cobertura") && !ok(m));
-    if let Some(f) = falha {
-        s.missao.estado = "falhou".into();
-        let nome = f.get("nome").and_then(Value::as_str).unwrap_or("").to_lowercase();
-        let txt = format!("Missão perdida: {nome} caiu abaixo de {}%.", numero_txt(f.get("minimoPct")));
-        s.registrar(txt, "ruim");
-        registrar_evento(s, json!({ "tipo": "missao", "estado": "falhou", "meta": f }));
-    } else if prog.iter().all(ok) {
-        s.missao.estado = "cumprida".into();
-        s.registrar(format!("Missão cumprida: {}!", p.missao_nome), "bom");
-        registrar_evento(s, json!({ "tipo": "missao", "estado": "cumprida" }));
+    let progress = mission_progress(s, p);
+    let ok = |g: &Value| g.get("ok") == Some(&Value::Bool(true));
+    let failed = progress.iter().position(|g| g.get("tipo").and_then(Value::as_str) == Some("cobertura") && !ok(g));
+    if let Some(k) = failed {
+        let g = &progress[k];
+        s.mission.status = "falhou".into();
+        let name = g.get("nome").and_then(Value::as_str).unwrap_or("");
+        let pct = number_text(g.get("minimoPct"));
+        let text = format!("Missão perdida: {} caiu abaixo de {pct}%.", name.to_lowercase());
+        let goal = text_ref_or(&["missao", "metas", &k.to_string(), "nome"], name);
+        let message = msg("log.missionFailed", json!({ "goal": goal, "pct": g.get("minimoPct") }));
+        s.record(text, "ruim", message);
+        push_event(s, json!({ "type": "mission", "status": "falhou", "goal": k, "pct": g.get("minimoPct") }));
+    } else if progress.iter().all(ok) {
+        s.mission.status = "cumprida".into();
+        let text = format!("Missão cumprida: {}!", p.mission_name);
+        s.record(text, "bom", msg("log.missionDone", json!({ "mission": text_ref(&["missao", "nome"]) })));
+        push_event(s, json!({ "type": "mission", "status": "cumprida" }));
     }
 }
 
-// ---------- comandos: a única forma de mudar o mundo. Um comando falho não muda nada.
-pub fn aplicar(s: &mut Estado, p: &Pacote, cmd: &Value) -> Value {
+// ---------- commands: the only way to change the world. A failed command changes nothing.
+pub fn apply(s: &mut State, p: &Package, cmd: &Value) -> Value {
     match cmd.get("tipo").and_then(Value::as_str) {
-        Some("ordem") => jogador::ordem(s, p, cmd),
-        Some("cancelar") => jogador::cancelar(s),
-        Some("fabricar") => fabricar(s, p, cmd),
-        Some("pesquisar") => pesquisar(s, p, cmd),
+        Some("ordem") => player::order_cmd(s, p, cmd),
+        Some("cancelar") => player::cancel(s),
+        Some("fabricar") => craft(s, p, cmd),
+        Some("pesquisar") => research(s, p, cmd),
         _ => {
             let t = match cmd.get("tipo") {
                 Some(Value::String(t)) => t.clone(),
                 Some(v) => v.to_string(),
                 None => "undefined".into(),
             };
-            resposta(false, Some(format!("Comando desconhecido: {t}")))
+            reply(false, Some(msg("error.unknownCommand", json!({ "type": t }))))
         }
     }
 }
 
-fn fabricar(s: &mut Estado, p: &Pacote, cmd: &Value) -> Value {
-    let r = cmd.get("receita").and_then(Value::as_str).and_then(|r| p.receita(r)).map(|r| &p.receitas[r as usize]);
-    let Some(r) = r.filter(|r| r.mao) else { return resposta(false, Some("Isso não se faz à mão.".into())) };
-    if !tem_itens(s, &r.entra) {
-        return resposta(false, Some(format!("Faltam {}.", faltam(s, p, &r.entra))));
+fn craft(s: &mut State, p: &Package, cmd: &Value) -> Value {
+    let r = cmd.get("receita").and_then(Value::as_str).and_then(|r| p.recipe(r)).map(|r| &p.recipes[r as usize]);
+    let Some(r) = r.filter(|r| r.by_hand) else { return reply(false, Some(key("error.notByHand"))) };
+    if !has_items(s, &r.inputs) {
+        return reply(false, Some(msg("error.missing", json!({ "items": missing_items(s, p, &r.inputs) }))));
     }
-    for (it, n) in &r.entra {
-        s.inv.por(*it, -n);
+    for (it, n) in &r.inputs {
+        s.inv.add(*it, -n);
     }
-    for (it, n) in &r.sai {
-        s.inv.por(*it, *n);
-        s.prod.por(*it, *n);
+    for (it, n) in &r.outputs {
+        s.inv.add(*it, *n);
+        s.produced.add(*it, *n);
     }
-    resposta(true, None)
+    reply(true, None)
 }
 
-fn pesquisar(s: &mut Estado, p: &Pacote, cmd: &Value) -> Value {
-    let id = cmd.get("tecnologia").and_then(Value::as_str).and_then(|t| p.tecnologia(t));
-    let Some(id) = id.filter(|t| !s.techs.contains(t)) else { return resposta(false, None) };
-    let t = &p.tecnologias[id as usize];
-    let falta: Vec<&str> =
-        t.requer.iter().filter(|r| !s.techs.contains(r)).map(|r| p.tecnologias[*r as usize].nome.as_str()).collect();
-    if !falta.is_empty() {
-        return resposta(false, Some(format!("Antes pesquise: {}.", falta.join(", "))));
+fn research(s: &mut State, p: &Package, cmd: &Value) -> Value {
+    let id = cmd.get("tecnologia").and_then(Value::as_str).and_then(|t| p.technology(t));
+    let Some(id) = id.filter(|t| !s.techs.contains(t)) else { return reply(false, None) };
+    let t = &p.technologies[id as usize];
+    let missing: Vec<Value> = t
+        .requires
+        .iter()
+        .filter(|r| !s.techs.contains(r))
+        .map(|r| name_ref("tecnologias", &p.technologies[*r as usize].id))
+        .collect();
+    if !missing.is_empty() {
+        return reply(false, Some(msg("error.researchFirst", json!({ "techs": list(missing) }))));
     }
-    if !tem_itens(s, &t.custo) {
-        return resposta(false, Some(format!("Faltam {}.", faltam(s, p, &t.custo))));
+    if !has_items(s, &t.cost) {
+        return reply(false, Some(msg("error.missing", json!({ "items": missing_items(s, p, &t.cost) }))));
     }
-    for (it, n) in &t.custo {
-        s.inv.por(*it, -n);
+    for (it, n) in &t.cost {
+        s.inv.add(*it, -n);
     }
     s.techs.push(id);
-    for el in &t.libera {
-        if !s.liberados.contains(el) {
-            s.liberados.push(*el);
+    for el in &t.unlocks {
+        if !s.unlocked.contains(el) {
+            s.unlocked.push(*el);
         }
     }
-    s.registrar(format!("Pesquisa concluída: {}.", t.nome), "bom");
-    if t.abre_era != 0 && t.abre_era > s.era {
-        s.era = t.abre_era;
-        let nome = p.eras.get((t.abre_era - 1) as usize).cloned().unwrap_or_default();
-        s.registrar(format!("Estamos entrando na era {nome}!"), "bom");
-        registrar_evento(s, json!({ "tipo": "era", "era": t.abre_era }));
+    let text = format!("Pesquisa concluída: {}.", t.name);
+    s.record(text, "bom", msg("log.researchDone", json!({ "tech": name_ref("tecnologias", &t.id) })));
+    if t.opens_era != 0 && t.opens_era > s.era {
+        s.era = t.opens_era;
+        let k = (t.opens_era - 1) as usize;
+        let name = p.eras.get(k).cloned().unwrap_or_default();
+        let era = text_ref_or(&["eras", &k.to_string(), "nome"], &name);
+        s.record(format!("Estamos entrando na era {name}!"), "bom", msg("log.newEra", json!({ "era": era })));
+        push_event(s, json!({ "type": "era", "era": t.opens_era }));
     }
-    resposta(true, None)
+    reply(true, None)
 }
 
-// ---------- replay: refaz comandos a partir de um estado
-fn tick_de(c: &Value) -> Option<f64> {
+// ---------- replay: redoes commands from a state
+fn tick_of(c: &Value) -> Option<f64> {
     num(c.get("t"))
 }
 
-/// Refaz os comandos a partir de um estado, até o tick pedido. Os comandos de
-/// antes do tick atual já estão no estado e são pulados.
-pub fn avancar(s: &mut Estado, p: &Pacote, comandos: &[Value], ate_tick: i64) {
+/// Redoes the commands from a state, up to the given tick. Commands from
+/// before the current tick are already in the state and are skipped.
+pub fn advance(s: &mut State, p: &Package, commands: &[Value], until_tick: i64) {
     let mut k = 0;
-    while k < comandos.len() && tick_de(&comandos[k]).is_some_and(|t| t < s.tick as f64) {
+    while k < commands.len() && tick_of(&commands[k]).is_some_and(|t| t < s.tick as f64) {
         k += 1;
     }
-    let aplicar_do_tick = |s: &mut Estado, k: &mut usize| {
-        while *k < comandos.len() && tick_de(&comandos[*k]) == Some(s.tick as f64) {
-            aplicar(s, p, &comandos[*k]);
+    let apply_this_tick = |s: &mut State, k: &mut usize| {
+        while *k < commands.len() && tick_of(&commands[*k]) == Some(s.tick as f64) {
+            apply(s, p, &commands[*k]);
             *k += 1;
         }
     };
-    while s.tick < ate_tick {
-        aplicar_do_tick(s, &mut k);
-        passo(s, p);
+    while s.tick < until_tick {
+        apply_this_tick(s, &mut k);
+        step(s, p);
     }
-    aplicar_do_tick(s, &mut k);
-    s.eventos.clear();
+    apply_this_tick(s, &mut k);
+    s.events.clear();
 }
 
-/// Recria o mundo a partir da configuração e do registro de comandos.
-pub fn rodar(p: &Pacote, cfg: &Value, comandos: &[Value], ate_tick: i64) -> Result<Estado, String> {
-    let mut s = novo_estado(p, cfg)?;
-    avancar(&mut s, p, comandos, ate_tick);
+/// Rebuilds the world from the configuration and the command log.
+pub fn replay(p: &Package, cfg: &Value, commands: &[Value], until_tick: i64) -> Result<State, String> {
+    let mut s = new_state(p, cfg)?;
+    advance(&mut s, p, commands, until_tick);
     Ok(s)
 }
