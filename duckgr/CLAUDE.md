@@ -30,13 +30,13 @@ Workspace Rust (nomes provisórios, prefixo `duckgr-`):
 
 Não comece pelo que é "depois". Ordem: `duckgr-sim` com testes, depois `duckgr-data`, depois wasm + cliente web.
 
-**Hoje:** existe um protótipo jogável em JavaScript puro em `web/` (núcleo em `web/plataforma/`, mundos em `web/jogos/`), com testes em `testes/` (`npm test`) e publicação no GitHub Pages a cada merge na `main`. Ele segue os mesmos princípios acima (comandos, ticks, inteiros, conteúdo só em pacotes) e serve para validar o modelo e o jogo enquanto o núcleo em Rust não existe. Quando o `duckgr-wasm` estiver pronto, ele substitui `web/plataforma/nucleo.js` mantendo a interface.
+**Hoje:** o núcleo está em Rust (`crates/duckgr-sim`, com pacote, gerador, simulação, jogador e comandos) e roda no navegador por WebAssembly (`crates/duckgr-wasm`, ponte em `web/plataforma/nucleo.js`). A interface continua em JavaScript puro em `web/` (mundos em `web/jogos/`), com testes em `testes/` (`npm test`, que compila o wasm antes) e publicação no GitHub Pages a cada merge na `main`. Os pacotes ainda são escritos em JavaScript e chegam ao núcleo como JSON; o `duckgr-data` (RON ou TOML) ainda não existe. O estado em JSON e o hash são idênticos aos do protótipo em JavaScript, para que os saves antigos continuem abrindo: qualquer mudança que altere o hash de uma partida existente precisa de versão nova do pacote ou do formato do save.
 
 ## Como trabalhar
 
 - Toda mudança entra por pull request, com descrição curta do quê e do porquê. Nada direto na `main`.
 - Commits no estilo Conventional Commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`).
-- Antes de abrir PR: `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all`.
+- Antes de abrir PR: `cargo fmt --all`, `cargo clippy --all-targets -- -D warnings`, `cargo test --all` e `npm test`.
 - Cada regra de jogo nova vem com teste que reproduz a regra a partir de uma sequência de comandos.
 - Teste de determinismo: rodar o mesmo log duas vezes e comparar o hash do estado.
 - Mantenha as tarefas pequenas: algo que o Davi consiga testar no fim de uma sessão de duas horas.

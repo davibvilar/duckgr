@@ -2,9 +2,13 @@
   "name": "duckgr",
   "private": true,
   "type": "module",
-  "description": "DuckGR: plataforma de mundos em grade. Protótipo web jogável.",
+  "description": "DuckGR: plataforma de mundos em grade. Núcleo em Rust (WebAssembly) e interface web.",
   "scripts": {
+    "wasm": "node ferramentas/compilar-wasm.mjs",
+    "pacotes": "node ferramentas/exportar-pacotes.mjs",
+    "pretest": "npm run wasm",
     "test": "node --test \"testes/*.test.js\"",
+    "preservir": "npm run wasm",
     "servir": "python3 -m http.server 8000 --directory web"
   }
 }

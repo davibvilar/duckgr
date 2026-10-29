@@ -25,10 +25,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: duckgr
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm test
+      - name: Formatação do Rust
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Testes do núcleo em Rust (regras, saves antigos, orçamento de desempenho)
+        run: cargo test --all
+      - name: Testes com o núcleo em WebAssembly (compila o wasm antes)
+        run: npm test
+      - name: Montar o site
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          mkdir -p _site
+          cp -r web/. _site/
+          mkdir -p _site/prototipos
+          cp docs/prototipos/*.html _site/prototipos/
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: duckgr/_site
 
   publicar:
     needs: testes
@@ -41,16 +66,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Montar o site
-        run: |
-          mkdir -p _site
-          cp -r web/. _site/
-          mkdir -p _site/prototipos
-          cp docs/prototipos/*.html _site/prototipos/
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: duckgr/_site
       - id: deploy
         uses: actions/deploy-pages@v4

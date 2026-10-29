@@ -1,0 +1,14 @@
+[workspace]
+members = ["crates/duckgr-sim", "crates/duckgr-wasm"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.5.0"
+publish = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

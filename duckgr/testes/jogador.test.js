@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { N, C, partida, acharCelula } from "./ajuda.js";
-import { caminho, custoPassagem, acoesPossiveis } from "../web/plataforma/jogador.js";
+import { caminho, custoPassagem, acoesPossiveis } from "../web/plataforma/nucleo.js";
 
 const longe = (S, a, b) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
 
@@ -11,17 +11,17 @@ test("o jogador começa numa célula onde dá para pisar", () => {
 });
 
 test("o jogador anda a pé na velocidade do pacote", () => {
-  const p = partida(), J = p.S.jog;
+  const p = partida(), J = () => p.S.jog;
   // um destino reto, de grama, a 4 células
-  const alvo = { x: J.x, y: J.y };
-  const r = caminho(p.S, C, J, { x: J.x + 4, y: J.y, acao: "ir" });
+  const alvo = { x: J().x, y: J().y };
+  const r = caminho(p.S, C, J(), { x: alvo.x + 4, y: alvo.y, acao: "ir" });
   assert.ok(r, "há caminho");
-  p.cmd({ tipo: "ordem", x: J.x + 4, y: J.y, acao: "ir" });
+  p.cmd({ tipo: "ordem", x: alvo.x + 4, y: alvo.y, acao: "ir" });
   const custo = r.reduce((a, i) => a + custoPassagem(p.S, C, i % p.S.L, Math.floor(i / p.S.L)), 0);
-  for (let k = 0; k < custo * C.jogador.ticksPorCelula - 1; k++) N.passo(p.S, C);
-  assert.notEqual(J.x, alvo.x + 4, "ainda não chegou um tick antes");
+  N.passo(p.S, C, custo * C.jogador.ticksPorCelula - 1);
+  assert.notEqual(J().x, alvo.x + 4, "ainda não chegou um tick antes");
   N.passo(p.S, C);
-  assert.deepEqual([J.x, J.y], [alvo.x + 4, alvo.y]);
+  assert.deepEqual([J().x, J().y], [alvo.x + 4, alvo.y]);
 });
 
 test("o jogador só age ao alcance: anda até a árvore antes de cortar", () => {

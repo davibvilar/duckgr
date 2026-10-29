@@ -11,7 +11,7 @@ export function partida(cfg = {}) {
   return {
     S, cmds, cfg,
     cmd(c) { c.t = S.tick; c.autor = "teste"; const r = N.aplicar(S, C, c); if (r.ok) cmds.push(c); return r; },
-    segundos(s) { for (let k = 0; k < s * N.TPS; k++) N.passo(S, C); },
+    segundos(s) { N.passo(S, C, Math.ceil(s * N.TPS)); },
     // Dá uma ordem ao jogador e roda o mundo até a fila esvaziar.
     // Devolve { ok, avisos } com os avisos que o jogador deu no caminho.
     fazer(o, maxSeg = 120) {

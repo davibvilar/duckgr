@@ -1,8 +1,7 @@
 // Desenho do mundo num canvas 2D. Genérico: a aparência de cada tipo vem
 // do pacote (cor, forma, símbolo). O núcleo não sabe que este arquivo existe.
 
-import { idx, total } from "./nucleo.js";
-import { custoPassagem } from "./jogador.js";
+import { idx, total, custoPassagem } from "./nucleo.js";
 
 export function ruido(x, y) {
   const s = Math.sin(x * 12.9898 + y * 78.233) * 43758.5453;

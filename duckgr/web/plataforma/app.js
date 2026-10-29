@@ -3,8 +3,8 @@
 // específico do mundo vem do pacote compilado (C).
 
 import * as N from "./nucleo.js";
+import { acoesPossiveis, velocidadeCelulasPorSegundo } from "./nucleo.js";
 import { desenharMundo, posJogador } from "./desenho.js";
-import { acoesPossiveis, velocidadeCelulasPorSegundo } from "./jogador.js";
 import * as Save from "./persistencia.js";
 import { PACOTES, PACOTE_PADRAO, EM_BREVE } from "../jogos/catalogo.js";
 
@@ -25,7 +25,7 @@ const pacote = id => (compilados[id] ||= N.compilar(PACOTES.find(p => p.id === i
 let P = null, C = null, S = null;
 let construindo = null, verCampo = false, invAberto = false, menuFixo = null;
 const flutuantes = []; // textos "+1 madeira" que sobem acima do pato
-let hover = null, celSel = null, pausado = false, tela = "jogo", hashVisto = "";
+let hover = null, celSel = null, pausado = false, tela = "jogo", hashVisto = "", hashSeg = -1;
 
 // ---------- partida
 // partida = { pacote, cfg, cmds, checkpoint? }; estado já pronto (de um save) é opcional
@@ -74,8 +74,8 @@ function quadro(agora) {
       acc += dt * prefs.velocidade;
       const ms = 1000 / N.TPS;
       let n = 0;
-      while (acc >= ms && n < 60) { N.passo(S, C); acc -= ms; n++; }
-      if (n) Save.talvezCheckpoint(P, S); // logo depois dos passos, antes de novos comandos
+      while (acc >= ms && n < 60) { acc -= ms; n++; }
+      if (n) { N.passo(S, C, n); Save.talvezCheckpoint(P, S); } // checkpoint logo depois dos passos, antes de novos comandos
       if (n >= 60) acc = 0;
       if (S.eventos.length) tratarEventos();
     }
@@ -480,7 +480,8 @@ function renderRegistro() {
 }
 
 function renderRodape() {
-  if (S.tick % N.TPS === 0 || !hashVisto) hashVisto = N.hashEstado(S);
+  const seg = Math.floor(S.tick / N.TPS); // o hash do mundo é recalculado uma vez por segundo de jogo
+  if (seg !== hashSeg) { hashSeg = seg; hashVisto = N.hashEstado(S); }
   html($("#rodape"), `<span>Tempo ${relogio(S.tick)} · tick ${S.tick}</span><span>${P.cmds.length} comandos</span><span>Hash do mundo <code>${hashVisto}</code></span><button class="linkbtn" id="conferir">Conferir replay</button><span>Pacote ${esc(C.id)} v${esc(C.versao)}</span>`);
 }
 

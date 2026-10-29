@@ -7,32 +7,15 @@
 // Tudo vai em JSON comprimido com gzip. Carregar custa refazer só alguns
 // minutos de jogo, e o arquivo fica na casa de poucos KB.
 
-import { novoEstado, aplicar, passo, hashEstado, TPS } from "./nucleo.js";
+import { novoEstado, restaurar, avancar, instantaneo, hashEstado, TPS } from "./nucleo.js";
 
 export const FORMATO = "duckgr-save";
 export const VERSAO_FORMATO = 1;
 export const CHECKPOINT_TICKS = 5 * 60 * TPS; // um checkpoint novo a cada 5 minutos de jogo
 
-// O estado do mundo, pronto para virar JSON (sem o que é só da interface).
-export function instantaneo(S) {
-  return JSON.parse(JSON.stringify(S, (k, v) => (k === "eventos" ? undefined : v)));
-}
-export function restaurar(inst) {
-  const S = structuredClone(inst);
-  S.eventos = [];
-  return S;
-}
-
-// Refaz os comandos a partir de um estado, até o tick pedido.
-export function avancar(S, C, comandos, ateTick) {
-  let k = 0;
-  while (k < comandos.length && comandos[k].t < S.tick) k++; // já incluídos no estado
-  const doTick = () => { while (k < comandos.length && comandos[k].t === S.tick) aplicar(S, C, comandos[k++]); };
-  while (S.tick < ateTick) { doTick(); passo(S, C); }
-  doTick();
-  S.eventos = [];
-  return S;
-}
+// O checkpoint é o estado do mundo em JSON, igual ao que o núcleo em
+// JavaScript gravava: saves feitos antes do núcleo em Rust abrem do mesmo jeito.
+export { instantaneo };
 
 // Monta o objeto do save. partida = { pacote, cfg, cmds (histórico), checkpoint? }
 export function montarSave(C, partida, S) {
@@ -54,7 +37,7 @@ export function carregarSave(C, save) {
   if (save.versao > VERSAO_FORMATO) throw new Error("Save de uma versão mais nova da plataforma.");
   if (save.pacote.id !== C.id) throw new Error(`Save de outro mundo (${save.pacote.id}).`);
   if (save.pacote.versao !== C.versao) throw new Error(`Save da versão ${save.pacote.versao} do mundo; esta é a ${C.versao}.`);
-  const S = save.checkpoint.estado ? restaurar(save.checkpoint.estado) : novoEstado(C, save.cfg);
+  const S = save.checkpoint.estado ? restaurar(C, save.checkpoint.estado) : novoEstado(C, save.cfg);
   avancar(S, C, save.historico.filter(c => c.t >= save.checkpoint.tick), save.tick);
   const ok = hashEstado(S) === save.hash;
   return { S, ok };

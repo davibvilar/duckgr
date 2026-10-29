@@ -60,7 +60,7 @@ test("máquinas poluem, a poluição se espalha e a floresta adoece", () => {
   // fornalhas trabalhando juntas no mesmo trecho do mapa
   const k0 = N.chunkDe(S, C, 20, 12);
   let n = 0;
-  S.inv["minerio-ferro"] = 400;
+  N.editar(S, C, e => { e.inv["minerio-ferro"] = 400; });
   for (let y = 8; y < 16 && n < 10; y++) for (let x = 16; x < 24 && n < 10; x++) {
     if (!p.fazer({ x, y, acao: "construir", elemento: "fornalha" }).ok) continue;
     p.fazer({ x, y, acao: "fornecer", item: "minerio-ferro" });
@@ -104,7 +104,7 @@ test("missão: perdida se a floresta cair abaixo do mínimo", () => {
 
 test("pesquisa: ciência libera o viveiro e a eletricidade abre a era 2", () => {
   const p = partida();
-  p.S.inv.ciencia = 25;
+  N.editar(p.S, C, e => { e.inv.ciencia = 25; });
   assert.equal(p.cmd({ tipo: "pesquisar", tecnologia: "eletricidade" }).ok, false); // requer viveiro
   assert.ok(p.cmd({ tipo: "pesquisar", tecnologia: "viveiro" }).ok);
   assert.ok(p.S.liberados.includes("viveiro"));
@@ -114,7 +114,7 @@ test("pesquisa: ciência libera o viveiro e a eletricidade abre a era 2", () => 
 
 test("viveiro só produz mudas ao lado da água", () => {
   const p = partida({ recursosIniciais: 5 });
-  p.S.techs.push("viveiro"); p.S.liberados.push("viveiro");
+  N.editar(p.S, C, e => { e.techs.push("viveiro"); e.liberados.push("viveiro"); });
   const viz = (x, y) => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => p.S.sub[N.idx(p.S, x + dx, y + dy)] === "agua");
   const livre = (i, x, y) => x > 0 && x < p.S.L - 1 && y > 0 && y < p.S.A - 1 && p.S.sub[i] === "solo" && !p.S.dep[i] && (!p.S.cov[i] || C.coberturas[p.S.cov[i]].substituivel);
   const perto = acharCelula(p.S, (i, x, y) => livre(i, x, y) && viz(x, y));

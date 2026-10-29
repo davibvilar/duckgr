@@ -1,0 +1,12 @@
+[package]
+name = "duckgr-sim"
+description = "Núcleo da simulação do DuckGR: células em camadas, elementos, campos, comandos e ticks."
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+# preserve_order: os pacotes e o estado mantêm a ordem das chaves, que decide
+# empates (qual item sai primeiro, qual receita é tentada antes).
+# float_roundtrip: lê números do pacote exatamente como o JavaScript escreveu.
+serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
