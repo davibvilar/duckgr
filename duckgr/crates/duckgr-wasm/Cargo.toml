@@ -1,0 +1,13 @@
+[package]
+name = "duckgr-wasm"
+description = "The DuckGR core compiled to WebAssembly, with a minimal JSON interface."
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+duckgr-sim = { path = "../duckgr-sim" }
+serde_json = "1"

@@ -2,3 +2,5 @@ node_modules/
 _site/
 target/
 .DS_Store
+# built by `npm run wasm`
+web/platform/duckgr.wasm

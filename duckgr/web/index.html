@@ -1,125 +1,126 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>DuckGR · Terra Viva</title>
+<title>DuckGR</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@500;700;800&display=swap">
-<link rel="stylesheet" href="estilo.css">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<!-- The texts live in the language files (platform/locales/): data-i18n* attributes hold their keys. -->
 <div class="wrap">
   <header class="top">
-    <div class="logo"><span class="a" id="nomeMundo">Terra Viva</span><small>DuckGR</small></div>
-    <div class="top-r" id="topo"></div>
+    <div class="logo"><span class="a" id="worldName"></span><small>DuckGR</small></div>
+    <div class="top-r" id="topBar"></div>
   </header>
 
-  <!-- TELA: JOGO -->
-  <main id="telaJogo" class="wrap">
-    <div class="palco" id="palco">
-    <section class="card missao" id="missao"></section>
+  <!-- SCREEN: GAME -->
+  <main id="screenGame" class="wrap">
+    <div class="stage" id="stage">
+    <section class="card mission" id="mission"></section>
     <div class="tools">
-      <div class="seg" id="construcoes"></div>
+      <div class="seg" id="buildBar"></div>
       <div class="seg">
-        <button id="abrirInv" title="Inventário (E)">🎒 Inventário <span class="tecla">E</span></button>
-        <button id="verCampo" aria-pressed="false" title="Ver poluição (V)">Ver poluição <span class="tecla">V</span></button>
+        <button id="openInv" data-i18n-title="board.inventoryTitle"><span data-i18n="board.inventory"></span> <span class="key" data-i18n="key.inventory"></span></button>
+        <button id="showField" aria-pressed="false" data-i18n-title="board.showFieldTitle"><span data-i18n="board.showField"></span> <span class="key" data-i18n="key.showField"></span></button>
       </div>
-      <div id="fila" class="fila"></div>
+      <div id="queue" class="queue"></div>
     </div>
-    <div class="hint" id="dica"></div>
-    <div class="board" id="tabuleiro"><canvas id="cv"></canvas><div class="menu-cel" id="menuCel" hidden></div>
-      <div class="cam-ctrl" aria-label="Câmera">
-        <button id="zoomMais" title="Aproximar (+)" aria-label="Aproximar">+</button>
-        <button id="zoomMenos" title="Afastar (−)" aria-label="Afastar">−</button>
-        <button id="seguir" title="Seguir o pato (H)" aria-label="Seguir o pato" aria-pressed="false">◎</button>
-        <button id="pausar2" title="Pausar (Espaço)" aria-label="Pausar">⏸</button>
-        <button id="telaCheia" title="Tela cheia (T)" aria-label="Tela cheia">⛶</button>
+    <div class="hint" id="hint"></div>
+    <div class="board" id="board"><canvas id="cv"></canvas><div class="cell-menu" id="cellMenu" hidden></div>
+      <div class="cam-ctrl" data-i18n-aria-label="board.camera">
+        <button id="zoomIn" data-i18n-title="board.zoomInTitle" data-i18n-aria-label="board.zoomIn">+</button>
+        <button id="zoomOut" data-i18n-title="board.zoomOutTitle" data-i18n-aria-label="board.zoomOut">−</button>
+        <button id="follow" data-i18n-title="board.followTitle" data-i18n-aria-label="board.follow" aria-pressed="false">◎</button>
+        <button id="pauseCam" data-i18n-title="board.pauseTitle" data-i18n-aria-label="board.pause">⏸</button>
+        <button id="fullscreen" data-i18n-title="board.fullscreenTitle" data-i18n-aria-label="board.fullscreen">⛶</button>
       </div>
     </div>
     </div>
     <div class="cols">
       <div class="wrap" style="gap:12px;margin:0;max-width:none">
-        <section class="card"><div class="linha"><h3>Inventário</h3><button class="linkbtn" id="abrirInv2">Abrir (E)</button></div><div class="chips" id="inventario"></div><div class="hint" id="infoJogador"></div></section>
-        <section class="card"><h3>Pesquisa</h3><div id="pesquisa" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
+        <section class="card"><div class="row"><h3 data-i18n="panel.inventory"></h3><button class="linkbtn" id="openInv2" data-i18n="panel.openInventory"></button></div><div class="chips" id="inventory"></div><div class="hint" id="playerInfo"></div></section>
+        <section class="card"><h3 data-i18n="panel.research"></h3><div id="research" class="wrap" style="gap:6px;margin:0;max-width:none"></div></section>
       </div>
       <div class="wrap" style="gap:12px;margin:0;max-width:none">
-        <section class="card"><h3 id="celTit">Camadas da célula</h3><dl class="camadas" id="celula"></dl></section>
-        <section class="card"><h3>Atalhos</h3><div class="atalhos" id="atalhos"></div></section>
+        <section class="card"><h3 id="cellTitle"></h3><dl class="layers" id="cell"></dl></section>
+        <section class="card"><h3 data-i18n="panel.shortcuts"></h3><div class="shortcuts" id="shortcuts"></div></section>
       </div>
     </div>
     <div class="eras" id="eras"></div>
-    <section class="card log"><h3>Registro do mundo</h3><ol id="registro"></ol></section>
-    <div class="foot" id="rodape"></div>
+    <section class="card log"><h3 data-i18n="panel.log"></h3><ol id="log"></ol></section>
+    <div class="foot" id="footer"></div>
   </main>
 
-  <!-- TELA: MENU -->
-  <main id="telaMenu" class="wrap" hidden>
-    <h1 class="tela-tit">Menu</h1>
+  <!-- SCREEN: MENU -->
+  <main id="screenMenu" class="wrap" hidden>
+    <h1 class="screen-title" data-i18n="menu.title"></h1>
     <div class="menu-grid">
-      <button class="opcao prim" data-ir="jogo"><h2>Continuar</h2><p>Voltar para o mundo em andamento.</p></button>
-      <button class="opcao" id="novoPadrao"><h2>Novo jogo</h2><p>Começa de novo no mundo padrão, sem perguntas.</p></button>
-      <button class="opcao" data-ir="montar"><h2>Montar mundo</h2><p>Escolha o pacote, o tamanho do mapa, a floresta, os recursos e as metas.</p></button>
-      <button class="opcao" data-ir="salvar"><h2>Salvar e carregar</h2><p>Leve a partida num arquivo, ou abra uma partida salva. Mostra o tamanho do save.</p></button>
-      <button class="opcao" data-ir="configurar"><h2>Configurações</h2><p>Velocidade, zoom e outras preferências deste aparelho.</p></button>
-      <button class="opcao" id="comoJogar"><h2>Como jogar</h2><p>Os primeiros passos da primeira era.</p></button>
+      <button class="option primary" data-go="game"><h2 data-i18n="menu.continue"></h2><p data-i18n="menu.continueText"></p></button>
+      <button class="option" id="newDefault"><h2 data-i18n="menu.newGame"></h2><p data-i18n="menu.newGameText"></p></button>
+      <button class="option" data-go="setup"><h2 data-i18n="menu.setup"></h2><p data-i18n="menu.setupText"></p></button>
+      <button class="option" data-go="save"><h2 data-i18n="menu.save"></h2><p data-i18n="menu.saveText"></p></button>
+      <button class="option" data-go="settings"><h2 data-i18n="menu.settings"></h2><p data-i18n="menu.settingsText"></p></button>
+      <button class="option" id="howToPlay"><h2 data-i18n="menu.howToPlay"></h2><p data-i18n="menu.howToPlayText"></p></button>
     </div>
-    <p class="foot">DuckGR é uma plataforma de mundos em grade. Cada mundo é um pacote de dados; esta versão traz o primeiro, a Terra Viva, só para um jogador.</p>
+    <p class="foot" data-i18n="menu.about"></p>
   </main>
 
-  <!-- TELA: CONFIGURAÇÕES -->
-  <main id="telaConfigurar" class="wrap" hidden>
-    <h1 class="tela-tit">Configurações</h1>
-    <section class="card form" id="formPrefs"></section>
+  <!-- SCREEN: SETTINGS -->
+  <main id="screenSettings" class="wrap" hidden>
+    <h1 class="screen-title" data-i18n="settings.title"></h1>
+    <section class="card form" id="prefsForm"></section>
     <section class="card">
-      <h3>Partida salva</h3>
-      <p class="muted small" style="margin:0">A partida é salva neste navegador como uma lista de comandos. Ao abrir de novo, o mundo é refeito comando a comando.</p>
-      <div class="acoes"><button class="btn perigo" id="apagarSave">Apagar partida salva</button></div>
+      <h3 data-i18n="settings.savedGame"></h3>
+      <p class="muted small" style="margin:0" data-i18n="settings.savedGameText"></p>
+      <div class="actions"><button class="btn danger" id="deleteSave" data-i18n="settings.deleteSave"></button></div>
     </section>
-    <div class="acoes"><button class="btn prim" data-ir="jogo">Voltar ao jogo</button><button class="btn" data-ir="menu">Menu</button></div>
+    <div class="actions"><button class="btn primary" data-go="game" data-i18n="common.backToGame"></button><button class="btn" data-go="menu" data-i18n="top.menu"></button></div>
   </main>
 
-  <!-- TELA: SALVAR E CARREGAR -->
-  <main id="telaSalvar" class="wrap" hidden>
-    <h1 class="tela-tit">Salvar e carregar</h1>
-    <p class="muted" style="margin:0;max-width:65ch">A partida é salva sozinha neste navegador a cada poucos segundos. Aqui você leva a partida para outro aparelho ou guarda uma cópia.</p>
-    <section class="card"><h3>Tamanho deste save</h3><div id="saveInfo" class="muted">Calculando…</div></section>
+  <!-- SCREEN: SAVE AND LOAD -->
+  <main id="screenSave" class="wrap" hidden>
+    <h1 class="screen-title" data-i18n="save.title"></h1>
+    <p class="muted" style="margin:0;max-width:65ch" data-i18n="save.intro"></p>
+    <section class="card"><h3 data-i18n="save.sizeTitle"></h3><div id="saveInfo" class="muted" data-i18n="save.computing"></div></section>
     <section class="card">
-      <h3>Levar a partida</h3>
-      <div class="acoes"><button class="btn prim" id="baixarSave">Baixar arquivo .duckgr</button><button class="btn" id="copiarSave">Copiar código do save</button></div>
-      <p class="hint" style="margin:0" id="exportInfo">O código é o mesmo arquivo em texto: dá para colar numa mensagem e abrir em outro aparelho.</p>
+      <h3 data-i18n="save.takeTitle"></h3>
+      <div class="actions"><button class="btn primary" id="downloadSave" data-i18n="save.download"></button><button class="btn" id="copySave" data-i18n="save.copy"></button></div>
+      <p class="hint" style="margin:0" id="exportInfo" data-i18n="save.exportInfo"></p>
     </section>
     <section class="card">
-      <h3>Abrir uma partida</h3>
-      <div class="acoes"><label class="btn" for="arquivoSave" style="cursor:pointer">Abrir arquivo…</label><input type="file" id="arquivoSave" accept=".duckgr,application/gzip,application/json" hidden></div>
-      <div class="campo"><label for="codigoSave">Ou cole o código do save</label><textarea id="codigoSave" rows="3" placeholder="H4sIA…"></textarea></div>
-      <div class="acoes"><button class="btn" id="colarSave">Abrir pelo código</button></div>
+      <h3 data-i18n="save.openTitle"></h3>
+      <div class="actions"><label class="btn" for="saveFile" style="cursor:pointer" data-i18n="save.openFile"></label><input type="file" id="saveFile" accept=".duckgr,application/gzip,application/json" hidden></div>
+      <div class="field"><label for="saveCode" data-i18n="save.pasteLabel"></label><textarea id="saveCode" rows="3" placeholder="H4sIA…"></textarea></div>
+      <div class="actions"><button class="btn" id="pasteSave" data-i18n="save.openCode"></button></div>
     </section>
-    <div class="acoes"><button class="btn prim" data-ir="jogo">Voltar ao jogo</button><button class="btn" data-ir="menu">Menu</button></div>
+    <div class="actions"><button class="btn primary" data-go="game" data-i18n="common.backToGame"></button><button class="btn" data-go="menu" data-i18n="top.menu"></button></div>
   </main>
 
-  <!-- TELA: MONTAR MUNDO -->
-  <main id="telaMontar" class="wrap" hidden>
-    <h1 class="tela-tit">Montar mundo</h1>
-    <section class="card form" id="formMundo"></section>
-    <div class="previa" id="previa"><canvas id="cvPrevia"></canvas></div>
-    <p class="hint" id="previaInfo"></p>
-    <div class="acoes"><button class="btn prim" id="comecarMontado">Começar este mundo</button><button class="btn" data-ir="menu">Voltar</button></div>
+  <!-- SCREEN: WORLD SETUP -->
+  <main id="screenSetup" class="wrap" hidden>
+    <h1 class="screen-title" data-i18n="setup.title"></h1>
+    <section class="card form" id="worldForm"></section>
+    <div class="preview" id="preview"><canvas id="previewCanvas"></canvas></div>
+    <p class="hint" id="previewInfo"></p>
+    <div class="actions"><button class="btn primary" id="startSetup" data-i18n="setup.start"></button><button class="btn" data-go="menu" data-i18n="common.back"></button></div>
   </main>
 </div>
 
-<div class="alert" id="telaInv" hidden>
-  <div class="box inv-box" role="dialog" aria-labelledby="invTit">
-    <div class="linha"><h2 id="invTit">Inventário</h2><button class="btn" id="fecharInv">Fechar <span class="tecla">E</span></button></div>
+<div class="alert" id="invScreen" hidden>
+  <div class="box inv-box" role="dialog" aria-labelledby="invTitle">
+    <div class="row"><h2 id="invTitle" data-i18n="panel.inventory"></h2><button class="btn" id="closeInv"><span data-i18n="common.close"></span> <span class="key" data-i18n="key.inventory"></span></button></div>
     <div class="slots" id="slots"></div>
-    <h3>Fabricar à mão</h3>
-    <div id="fabricar" class="wrap" style="gap:6px;margin:0;max-width:none"></div>
-    <p class="hint" id="invJogador"></p>
+    <h3 data-i18n="inventory.craftTitle"></h3>
+    <div id="craft" class="wrap" style="gap:6px;margin:0;max-width:none"></div>
+    <p class="hint" id="invPlayer"></p>
   </div>
 </div>
 <div class="toast" id="toast" hidden></div>
-<div class="alert" id="alerta" hidden><div class="box" id="alertaBox"><h2 id="alertaTit"></h2><div id="alertaTxt"></div><button class="btn prim" id="alertaBtn">Entendi</button></div></div>
+<div class="alert" id="alert" hidden><div class="box" id="alertBox"><h2 id="alertTitle"></h2><div id="alertText"></div><button class="btn primary" id="alertBtn"></button></div></div>
 
-<script type="module" src="plataforma/app.js"></script>
+<script type="module" src="platform/app.js"></script>
 </body>
 </html>

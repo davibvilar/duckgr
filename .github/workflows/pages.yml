@@ -1,6 +1,6 @@
-# Roda os testes em todo pull request e em todo push.
-# Quando algo entra na main, publica o jogo no GitHub Pages.
-name: Testes e publicação
+# Runs the tests on every pull request and every push.
+# When something lands on main, publishes the game on GitHub Pages.
+name: Tests and deploy
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
 permissions:
   contents: read
 
-# O projeto mora na pasta duckgr/ do repositório.
+# The project lives in the repository's duckgr/ folder.
 defaults:
   run:
     working-directory: duckgr
@@ -21,17 +21,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  testes:
+  tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: duckgr
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm test
+      - name: Rust formatting
+        run: cargo fmt --all --check
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Rust core tests (rules, old saves, performance budget)
+        run: cargo test --all
+      - name: Tests with the WebAssembly core (builds the wasm first)
+        run: npm test
+      - name: Build the site
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          mkdir -p _site
+          cp -r web/. _site/
+          mkdir -p _site/prototipos
+          cp docs/prototipos/*.html _site/prototipos/
+      - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: duckgr/_site
 
-  publicar:
-    needs: testes
+  deploy:
+    needs: tests
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
@@ -41,16 +66,6 @@ jobs:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
-      - name: Montar o site
-        run: |
-          mkdir -p _site
-          cp -r web/. _site/
-          mkdir -p _site/prototipos
-          cp docs/prototipos/*.html _site/prototipos/
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: duckgr/_site
       - id: deploy
         uses: actions/deploy-pages@v4
