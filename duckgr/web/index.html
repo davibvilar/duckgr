@@ -4,8 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>DuckGR</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@500;700;800&display=swap">
+<meta name="theme-color" content="#1d2a3a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -76,6 +78,12 @@
       <h3 data-i18n="settings.savedGame"></h3>
       <p class="muted small" style="margin:0" data-i18n="settings.savedGameText"></p>
       <div class="actions"><button class="btn danger" id="deleteSave" data-i18n="settings.deleteSave"></button></div>
+    </section>
+    <section class="card">
+      <h3 data-i18n="settings.offline"></h3>
+      <p class="muted small" style="margin:0" data-i18n="settings.offlineText"></p>
+      <p class="hint" style="margin:0" id="offlineStatus"></p>
+      <div class="actions"><button class="btn primary" id="installApp" data-i18n="settings.install" hidden></button></div>
     </section>
     <div class="actions"><button class="btn primary" data-go="game" data-i18n="common.backToGame"></button><button class="btn" data-go="menu" data-i18n="top.menu"></button></div>
   </main>

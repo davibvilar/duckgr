@@ -152,6 +152,7 @@ export default {
   "float.loss": "−{n} {item|lower}",
 
   // quick notices
+  "toast.updated": "Nova versão do jogo baixada. Ela entra na próxima vez que você abrir o jogo.",
   "toast.newGame": "Novo jogo no mundo padrão.",
   "toast.deleted": "Partida apagada. Novo jogo no mundo padrão.",
   "toast.worldReady": "Mundo montado. Bom jogo!",
@@ -195,6 +196,12 @@ export default {
   "settings.savedGame": "Partida salva",
   "settings.savedGameText": "A partida é salva neste navegador como uma lista de comandos. Ao abrir de novo, o mundo é refeito comando a comando.",
   "settings.deleteSave": "Apagar partida salva",
+  "settings.offline": "Jogar sem internet",
+  "settings.offlineText": "Depois da primeira visita, o jogo fica guardado neste aparelho e abre sem internet: jogar, criar mundos, salvar e carregar. Para ter um ícone como aplicativo, instale pelo botão abaixo ou, no celular, pela opção \"Adicionar à tela inicial\" do navegador.",
+  "settings.offlineReady": "Pronto: este aparelho já tem uma cópia do jogo para jogar sem internet.",
+  "settings.offlineNotReady": "Ainda guardando o jogo neste aparelho. Mantenha a internet ligada por alguns segundos.",
+  "settings.offlineUnavailable": "Este navegador não guarda o jogo para jogar sem internet.",
+  "settings.install": "Instalar como aplicativo",
 
   // world setup
   "setup.title": "Montar mundo",

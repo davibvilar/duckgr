@@ -152,6 +152,7 @@ export default {
   "float.loss": "−{n} {item|lower}",
 
   // quick notices
+  "toast.updated": "A new version of the game was downloaded. It starts the next time you open the game.",
   "toast.newGame": "New game in the default world.",
   "toast.deleted": "Game deleted. New game in the default world.",
   "toast.worldReady": "World ready. Have fun!",
@@ -195,6 +196,12 @@ export default {
   "settings.savedGame": "Saved game",
   "settings.savedGameText": "The game is saved in this browser as a list of commands. When you open it again, the world is rebuilt command by command.",
   "settings.deleteSave": "Delete saved game",
+  "settings.offline": "Play without internet",
+  "settings.offlineText": "After the first visit, the game is kept on this device and opens without internet: play, create worlds, save and load. For an app icon, install it with the button below or, on a phone, with the browser's \"Add to Home Screen\" option.",
+  "settings.offlineReady": "Ready: this device has a copy of the game to play without internet.",
+  "settings.offlineNotReady": "Still keeping the game on this device. Stay online for a few seconds.",
+  "settings.offlineUnavailable": "This browser can't keep the game for playing without internet.",
+  "settings.install": "Install as an app",
 
   // world setup
   "setup.title": "Set up a world",
