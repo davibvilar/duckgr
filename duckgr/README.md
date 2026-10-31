@@ -16,6 +16,8 @@ Idioma: o jogo abre no idioma do navegador (português ou inglês) e dá para tr
 
 Câmera: arraste para mover o mapa e use a roda do mouse (ou + e −) para o zoom; no celular, arraste com um dedo e faça pinça com dois. O botão ◎ (tecla H) volta a seguir o pato, e ⛶ (tecla T) põe o jogo em tela cheia. No celular, tocar numa célula abre uma folha com as ações em botões grandes, e "+ fila" faz o papel do Shift. A cada merge na `main`, o jogo é publicado no GitHub Pages.
 
+Sem internet: depois da primeira visita, o jogo fica guardado no aparelho (service worker em `web/sw.js`) e abre offline, com novo jogo, salvar e carregar. Ele também pode ser instalado como aplicativo (PWA), no computador ou pelo "Adicionar à tela inicial" do celular. Tudo é servido junto com o jogo, inclusive as fontes (`web/fonts/`).
+
 O rascunho das regras do Paz ou Guerra continua em [`docs/prototipos/paz-ou-guerra.html`](docs/prototipos/paz-ou-guerra.html).
 
 ## Como rodar
@@ -26,6 +28,7 @@ Precisa do Rust (com o alvo WebAssembly) e do Node 22.
 rustup target add wasm32-unknown-unknown   # uma vez só
 npm test          # compila o núcleo para WebAssembly e roda os testes
 npm run serve     # compila e abre um servidor em http://localhost:8000
+npm run serve:site # monta o site como no Pages (_site/, com cache offline) e serve em :8000
 cargo test        # testes do núcleo em Rust
 ```
 

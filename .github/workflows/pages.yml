@@ -45,11 +45,7 @@ jobs:
         run: npm test
       - name: Build the site
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: |
-          mkdir -p _site
-          cp -r web/. _site/
-          mkdir -p _site/prototipos
-          cp docs/prototipos/*.html _site/prototipos/
+        run: node tools/build-site.mjs
       - if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

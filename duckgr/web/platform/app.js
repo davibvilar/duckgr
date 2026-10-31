@@ -587,7 +587,36 @@ function renderPrefs() {
     write(KEY_PREFS, prefs);
     if (id === "language") refreshLanguage();
   };
+  renderOffline();
 }
+
+// ---------- offline play: the service worker (sw.js) keeps a copy of the game
+let installPrompt = null;
+const canWorkOffline = "serviceWorker" in navigator && location.protocol !== "file:";
+if (canWorkOffline) {
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").catch(err => console.warn("Offline play is unavailable:", err));
+  // a new version took over: the page keeps running the old one until it reloads
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) toast(t("toast.updated"));
+    if (screen === "settings") renderOffline();
+  });
+}
+addEventListener("beforeinstallprompt", e => { e.preventDefault(); installPrompt = e; if (screen === "settings") renderOffline(); });
+addEventListener("appinstalled", () => { installPrompt = null; if (screen === "settings") renderOffline(); });
+async function renderOffline() {
+  const ready = canWorkOffline && !!navigator.serviceWorker.controller &&
+    (await caches.keys().catch(() => [])).some(k => k.startsWith("duckgr-"));
+  $("#offlineStatus").textContent = t(!canWorkOffline ? "settings.offlineUnavailable" : ready ? "settings.offlineReady" : "settings.offlineNotReady");
+  $("#installApp").hidden = !installPrompt;
+}
+$("#installApp").onclick = async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => null);
+  installPrompt = null;
+  renderOffline();
+};
 $("#deleteSave").onclick = () => { remove(KEY_OLD_GAME); remove(KEY_SAVE); newDefault(); toast(t("toast.deleted")); };
 
 // World setup: package, map, forest, resources and goals, with a preview
