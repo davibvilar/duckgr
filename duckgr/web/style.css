@@ -144,7 +144,16 @@ button:disabled{cursor:not-allowed;opacity:.45}
 .cell-menu .action:hover,.cell-menu .action.default{background:var(--panel2)}
 .cell-menu .action small{display:block;font-weight:700;color:var(--muted);font-size:11px}
 .cell-menu .footer{color:var(--muted);font-size:11px;padding:2px 4px 0}
-.queue{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:var(--gold)}
+.queue{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13px;font-weight:800;color:var(--gold);min-width:0}
+.queue .tasks{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px;flex-basis:100%;max-height:96px;overflow:auto}
+.queue .task{display:flex;align-items:center;gap:5px;background:var(--panel2);color:var(--ink);border-radius:8px;padding:2px 2px 2px 6px;font-size:12px}
+.queue .task.current{box-shadow:inset 0 0 0 2px var(--gold)}
+.queue .task .n{color:var(--gold)}
+.queue .task .count{color:var(--muted);font-variant-numeric:tabular-nums}
+.queue .task button{background:none;color:var(--muted);font-size:14px;line-height:1;padding:2px 6px;border-radius:6px}
+.queue .task button:hover{color:var(--ink);background:var(--panel3)}
+.mine-times{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:800}
+.mine-times input{width:5.5em;background:var(--panel2);border:2px solid transparent;border-radius:8px;padding:3px 6px}
 .shortcuts{display:grid;grid-template-columns:auto 1fr;gap:5px 10px;font-size:13px;align-items:center}
 .shortcuts span:nth-child(even){color:var(--muted);font-weight:700}
 .inv-box{max-width:620px;width:100%;border-color:var(--gold)}
@@ -191,3 +200,6 @@ body.immersive .tools .seg{flex-wrap:nowrap;flex:none}
 .sizes{display:grid;grid-template-columns:1fr auto auto;gap:4px 16px;font-size:13px;font-variant-numeric:tabular-nums}
 .sizes b{color:var(--ink)} .sizes span:nth-child(3n+1){color:var(--muted);font-weight:700}
 .sizes .total{border-top:1px solid var(--panel3);padding-top:4px}
+.queue:has(.tasks){flex-basis:100%}
+body.immersive .queue{flex-basis:auto;flex:none}
+body.immersive .queue .tasks{display:none}

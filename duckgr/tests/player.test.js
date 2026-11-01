@@ -48,7 +48,7 @@ test("deep water blocks; the duck crosses the river at the ford", () => {
   assert.deepEqual(r.msg, { key: "error.cannotStep" });
 });
 
-test("the queue runs the orders in sequence; without Shift, the new order replaces it", () => {
+test("the queue runs the orders in sequence; without `adicionar`, the new order replaces it", () => {
   const g = game(), S = g.S;
   const trees = [];
   for (let i = 0; i < S.cov.length && trees.length < 3; i++) if (S.cov[i] === "adulta") trees.push({ x: i % S.L, y: Math.floor(i / S.L) });
@@ -69,6 +69,56 @@ test("mining repeats the action the order's number of times", () => {
   const before = S.inv.pedra;
   assert.ok(g.order({ ...d, acao: "minerar", vezes: 5 }).ok);
   assert.equal(S.inv.pedra, before + 5);
+});
+
+test("mining takes a free number of times, well beyond the old limit of 99", () => {
+  const g = game(), { S } = g;
+  const i = S.dep.findIndex(Boolean);
+  N.edit(S, C, snap => { snap.depQtd[i] = 500; }); // a big deposit, by hand
+  const d = { x: i % S.L, y: Math.floor(i / S.L) }, item = C.depositos[S.dep[i]].item;
+  const before = S.inv[item] || 0;
+  const left = S.depQtd[i];
+  const r = g.order({ ...d, acao: "minerar", vezes: 120 }, 600);
+  assert.ok(r.ok, JSON.stringify(r));
+  assert.equal((S.inv[item] || 0) - before, 120);
+  assert.equal(S.depQtd[i], left - 120);
+});
+
+test("a repeated order ends quietly when the deposit runs out, and the next order goes", () => {
+  const g = game(), S = g.S;
+  const i = S.depQtd.findIndex((n, i) => S.dep[i] && n > 3 && n < 60);
+  assert.ok(i >= 0, "there is a small deposit");
+  const d = { x: i % S.L, y: Math.floor(i / S.L) }, left = S.depQtd[i], item = C.depositos[S.dep[i]].item;
+  const before = S.inv[item] || 0;
+  // asks for more than the deposit has, then something else
+  g.cmd({ tipo: "ordem", ...d, acao: "minerar", vezes: left + 10, adicionar: true });
+  g.cmd({ tipo: "ordem", x: S.jog.x, y: S.jog.y, acao: "ir", adicionar: true });
+  S.events = [];
+  g.seconds(120);
+  assert.deepEqual(S.events.filter(e => e.type === "warning"), [], "no warning: the order just ends");
+  assert.equal(S.jog.fila.length, 0, "the queue went to the end");
+  assert.equal((S.inv[item] || 0) - before, left);
+  assert.equal(S.dep[i], null);
+});
+
+test("a queued order can be taken out by its position", () => {
+  const g = game(), S = g.S;
+  const cells = [1, 2, 3].map(dx => ({ x: S.jog.x + dx, y: S.jog.y }));
+  for (const c of cells) assert.ok(g.cmd({ tipo: "ordem", ...c, acao: "ir", adicionar: true }).ok);
+  assert.ok(g.cmd({ tipo: "remover", indice: 1 }).ok);
+  assert.deepEqual(S.jog.fila.map(o => o.x), [cells[0].x, cells[2].x]);
+  assert.ok(g.cmd({ tipo: "remover", indice: 0 }).ok);
+  assert.deepEqual(S.jog.fila.map(o => o.x), [cells[2].x]);
+  assert.equal(g.cmd({ tipo: "remover", indice: 5 }).ok, false);
+  assert.equal(g.cmd({ tipo: "remover", indice: -1 }).ok, false);
+});
+
+test("the queue holds up to the limit, and says when it is full", () => {
+  const g = game(), S = g.S;
+  for (let k = 0; k < N.QUEUE_MAX; k++) assert.ok(g.cmd({ tipo: "ordem", x: S.jog.x, y: S.jog.y, acao: "ir", adicionar: true }).ok);
+  const r = g.cmd({ tipo: "ordem", x: S.jog.x, y: S.jog.y, acao: "ir", adicionar: true });
+  assert.equal(r.ok, false);
+  assert.deepEqual(r.msg, { key: "error.queueFull" });
 });
 
 test("the cell menu lists what can be done, without looking at the distance", () => {

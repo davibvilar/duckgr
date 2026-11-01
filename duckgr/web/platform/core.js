@@ -13,6 +13,9 @@
 // first version wrote them.
 
 export const TPS = 30; // ticks per second
+// the same limits as the core (crates/duckgr-sim/src/player.rs)
+export const QUEUE_MAX = 50; // orders in the queue
+export const TIMES_MAX = 9999; // repetitions of one order
 
 const W = await load();
 

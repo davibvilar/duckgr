@@ -58,6 +58,7 @@ function start(game, untilTick = 0, state = null) {
   S = state || (untilTick ? N.replay(C, G.cfg, G.cmds, untilTick) : N.newState(C, G.cfg));
   building = null; selCell = null; pinnedMenu = null; paused = false; cam.ready = false;
   renderWorldName();
+  $("#mineTimes").value = mineTimes();
   resize();
   renderAll();
   save();
@@ -203,9 +204,9 @@ function draw(time) {
 
 // ---------- board input
 // Mouse: hovering shows the cell's actions; clicking does the default
-// action; keys do the shortcut's action. Shift (or the "+ queue" button)
-// puts it at the end of the queue.
-// Touch: tapping opens the cell menu, and tapping an action does it.
+// action; keys do the shortcut's action. Every action goes to the end of
+// the queue; Shift (or the "now" button) drops the queue and does it now.
+// Touch: tapping opens the cell menu, and tapping an action queues it.
 // The actions keep the names of the commands ("ir", "colher"...).
 const ACTIONS = ["ir", "colher", "minerar", "plantar", "recolher", "abastecer", "fornecer", "desmontar"];
 const DEFAULT_ORDER = ["recolher", "abastecer", "fornecer", "colher", "minerar", "ir"];
@@ -213,14 +214,31 @@ const keyOf = a => a.acao === "construir" ? String(buildable().indexOf(a.element
 const buildable = () => Object.keys(C.elementos).filter(el => S.liberados.includes(el));
 function options(c) {
   const r = N.possibleActions(S, C, c.x, c.y);
+  r.actions = r.actions.map(withTimes);
   r.actions.forEach(a => (a.key = keyOf(a)));
   r.default = DEFAULT_ORDER.map(ac => r.actions.find(a => a.acao === ac)).find(Boolean) || null;
   return r;
 }
-function order(a, append) {
+// How many times "minerar" repeats: a free number the player types (it
+// stays in this device's preferences); the package gives the default.
+function mineTimes() {
+  const n = Math.floor(Number(prefs.mineTimes));
+  return n >= 1 ? Math.min(n, N.TIMES_MAX) : C.jogador.minerarVezes || 1;
+}
+// The order for an action, with the typed amount for mining (never more
+// than what is left in the deposit after the mining already in the queue).
+function withTimes(a) {
+  if (a.acao !== "minerar") return a;
+  const queued = S.jog.fila.filter(o => o.acao === "minerar" && o.x === a.x && o.y === a.y).reduce((sum, o) => sum + (o.vezes || 1) - (o.feitas || 0), 0);
+  const left = Math.max(1, (S.depQtd[N.idx(S, a.x, a.y)] || 1) - queued), n = Math.min(mineTimes(), left);
+  return { ...a, vezes: n, label: a.label?.args ? { ...a.label, args: { ...a.label.args, n } } : a.label };
+}
+// Without `now`, the order goes to the end of the queue; with it, it
+// replaces the queue.
+function order(a, now) {
   if (!a) return;
-  const { x, y, acao, item, elemento, vezes } = a;
-  command({ tipo: "ordem", x, y, acao, item, elemento, vezes, adicionar: !!append });
+  const { x, y, acao, item, elemento, vezes } = withTimes(a);
+  command({ tipo: "ordem", x, y, acao, item, elemento, vezes, adicionar: !now });
 }
 
 function cellAt(e) {
@@ -358,7 +376,7 @@ function renderCellMenu() {
   const o = options(c);
   const label = a => `${esc(msg(a.label))}${a.detail ? `<small>${esc(msg(a.detail))}</small>` : ""}`;
   const rows = o.actions.map((a, k) => pinnedMenu
-    ? `<div class="action-row"><button class="action" data-action="${k}"><span>${label(a)}</span></button><button class="more" data-action="${k}" data-queue="1" aria-label="${esc(t("menu.queueLabel"))}">${esc(t("menu.queue"))}</button></div>`
+    ? `<div class="action-row"><button class="action" data-action="${k}"><span>${label(a)}</span></button><button class="more" data-action="${k}" data-now="1" aria-label="${esc(t("menu.nowLabel"))}">${esc(t("menu.now"))}</button></div>`
     : `<button class="action ${a === o.default ? "default" : ""}" data-action="${k}"><span class="key">${esc(a.key)}</span><span>${label(a)}</span></button>`).join("");
   const notes = o.notes.map(n => `<div class="note ${n.kind}">${esc(msg(n.msg))}</div>`).join("");
   const hint = t(pinnedMenu ? "menu.hintTouch" : "menu.hintMouse");
@@ -419,12 +437,30 @@ function renderBuildBar() {
     const title = t("build.tooltip", { tip: e.dica || "", cost: itemList(e.custo, C, " + ") });
     return `<button data-build="${id}" class="${building === id ? "on" : ""}" ${k >= 0 ? "" : "disabled"} title="${esc(title)}">${k >= 0 ? `<span class="key">${k + 1}</span>` : ""}${esc(e.aparencia.simbolo)} ${esc(e.nome)}${k >= 0 ? "" : " 🔒"}</button>`;
   }).join(""));
-  const n = S.jog.fila.length;
-  html($("#queue"), n ? `<span>${esc(t("queue.tasks", { count: n }))}</span><button class="btn" id="cancelQueue">${esc(t("queue.stop"))} <span class="key">Esc</span></button>` : "");
+  renderQueue();
   let hint = t("hint.mouse");
   if (building) { const e = C.elementos[building]; hint = t("hint.building", { element: e.nome, tip: e.dica || "" }); }
   else if (!matchMedia("(hover:hover)").matches) hint = t("hint.touch");
   html($("#hint"), prefs.hints ? esc(hint) : "");
+}
+
+// The task queue: one chip per order, in the order the duck will do them,
+// with how far a repeated one has gone and a button to take it out.
+function taskLabel(o) {
+  const args = { x: o.x, y: o.y };
+  if (o.item) args.item = C.itens[o.item]?.nome ?? o.item;
+  if (o.elemento) args.element = C.elementos[o.elemento]?.nome ?? o.elemento;
+  if (o.acao === "minerar") { const d = S.dep[N.idx(S, o.x, o.y)]; args.deposit = d ? C.depositos[d].nome : ""; }
+  return t(`task.${o.acao}`, args);
+}
+function renderQueue() {
+  const q = S.jog.fila;
+  if (!q.length) { html($("#queue"), ""); return; }
+  const chips = q.map((o, k) => {
+    const count = o.vezes > 1 ? ` <span class="count">${o.feitas || 0}/${o.vezes}</span>` : "";
+    return `<li class="task ${k === 0 ? "current" : ""}"><span class="n">${k + 1}</span><span>${esc(taskLabel(o))}</span>${count}<button data-unqueue="${k}" aria-label="${esc(t("queue.removeLabel", { n: k + 1 }))}" title="${esc(t("queue.removeLabel", { n: k + 1 }))}">×</button></li>`;
+  }).join("");
+  html($("#queue"), `<span>${esc(t("queue.tasks", { count: q.length }))}</span><button class="btn" id="cancelQueue">${esc(t("queue.stop"))} <span class="key">Esc</span></button><ol class="tasks">${chips}</ol>`);
 }
 
 function renderInventory() {
@@ -526,7 +562,8 @@ document.addEventListener("click", e => {
   const d = b.dataset;
   if (d.go) return go(d.go);
   if (d.build) { building = building === d.build ? null : d.build; return renderBuildBar(); }
-  if (d.action) { const a = $("#cellMenu").__actions?.[Number(d.action)]; pinnedMenu = null; order(a, e.shiftKey || !!d.queue); return renderCellMenu(); }
+  if (d.action) { const a = $("#cellMenu").__actions?.[Number(d.action)]; pinnedMenu = null; order(a, e.shiftKey || !!d.now); return renderCellMenu(); }
+  if (d.unqueue) return command({ tipo: "remover", indice: Number(d.unqueue) });
   if (d.closemenu) { pinnedMenu = null; return renderCellMenu(); }
   if (b.id === "cancelQueue") return command({ tipo: "cancelar" });
   if (b.id === "openInv" || b.id === "openInv2") return toggleInv(true);
@@ -536,6 +573,11 @@ document.addEventListener("click", e => {
   if (b.id === "pause") { paused = !paused; return renderTop(); }
   if (b.id === "checkReplay") return checkReplay();
 });
+$("#mineTimes").addEventListener("input", e => {
+  const n = Math.floor(Number(e.target.value));
+  if (n >= 1) { prefs.mineTimes = Math.min(n, N.TIMES_MAX); write(KEY_PREFS, prefs); renderCellMenu(); }
+});
+$("#mineTimes").addEventListener("change", e => { e.target.value = mineTimes(); });
 $("#showField").onclick = () => { showField = !showField; $("#showField").classList.toggle("on", showField); $("#showField").setAttribute("aria-pressed", showField); };
 $("#newDefault").onclick = () => { newDefault(); go("game"); toast(t("toast.newGame")); };
 $("#howToPlay").onclick = () => { go("game"); howToPlay(); };

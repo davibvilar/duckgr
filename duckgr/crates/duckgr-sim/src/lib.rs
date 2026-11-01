@@ -480,6 +480,7 @@ pub fn apply(s: &mut State, p: &Package, cmd: &Value) -> Value {
     match cmd.get("tipo").and_then(Value::as_str) {
         Some("ordem") => player::order_cmd(s, p, cmd),
         Some("cancelar") => player::cancel(s),
+        Some("remover") => player::remove_cmd(s, cmd),
         Some("fabricar") => craft(s, p, cmd),
         Some("pesquisar") => research(s, p, cmd),
         _ => {

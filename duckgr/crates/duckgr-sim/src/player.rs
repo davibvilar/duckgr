@@ -543,6 +543,11 @@ pub fn player_step(s: &mut State, p: &Package) {
     s.player.path.clear();
     s.player.step = 0;
     if let Some(error) = validate(s, p, &o) {
+        // a repeated order that already did some of its work ends quietly
+        // when there is nothing left (the deposit ran out): the next one goes
+        if o.done.unwrap_or(0) > 0 {
+            return finish_first(s);
+        }
         return fail(s, error);
     }
     s.player.task += 1;
@@ -573,11 +578,15 @@ fn clear_queue(s: &mut State) {
     s.player.task = 0;
 }
 
-fn fail(s: &mut State, message: Value) {
+fn finish_first(s: &mut State) {
     s.player.queue.remove(0);
     s.player.path.clear();
     s.player.step = 0;
     s.player.task = 0;
+}
+
+fn fail(s: &mut State, message: Value) {
+    finish_first(s);
     push_event(s, json!({ "type": "warning", "msg": message }));
 }
 
@@ -593,6 +602,11 @@ fn integer(v: Option<&Value>) -> Option<i64> {
     num(v).filter(|f| f.fract() == 0.0 && f.abs() < 9e15).map(|f| f as i64)
 }
 
+/// Most orders the queue holds at once.
+pub const QUEUE_MAX: usize = 50;
+/// Most repetitions of one order (e.g. "mine 500 times").
+pub const TIMES_MAX: i64 = 9999;
+
 /// Command "ordem": gives the player an order. With `adicionar`, it goes to
 /// the end of the queue; without, it replaces the queue.
 pub fn order_cmd(s: &mut State, p: &Package, cmd: &Value) -> Value {
@@ -602,7 +616,7 @@ pub fn order_cmd(s: &mut State, p: &Package, cmd: &Value) -> Value {
     if !s.inside(x, y) {
         return reply(false, None);
     }
-    let times = num(cmd.get("vezes")).filter(|v| *v > 1.0).map(|v| (to_int32(v) as i64).min(99));
+    let times = num(cmd.get("vezes")).filter(|v| *v > 1.0).map(|v| (to_int32(v) as i64).min(TIMES_MAX));
     let o = Order {
         x,
         y,
@@ -619,13 +633,27 @@ pub fn order_cmd(s: &mut State, p: &Package, cmd: &Value) -> Value {
         return reply(false, Some(key("error.cannotStep")));
     }
     if truthy(cmd.get("adicionar")) {
-        if s.player.queue.len() >= 20 {
+        if s.player.queue.len() >= QUEUE_MAX {
             return reply(false, Some(key("error.queueFull")));
         }
         s.player.queue.push(o);
     } else {
         clear_queue(s);
         s.player.queue.push(o);
+    }
+    reply(true, None)
+}
+
+/// Command "remover": takes one order out of the queue, by its position
+/// (`indice`, from 0). Removing the first one stops what the player was doing.
+pub fn remove_cmd(s: &mut State, cmd: &Value) -> Value {
+    let Some(k) = integer(cmd.get("indice")).filter(|k| *k >= 0 && (*k as usize) < s.player.queue.len()) else {
+        return reply(false, None);
+    };
+    if k == 0 {
+        finish_first(s);
+    } else {
+        s.player.queue.remove(k as usize);
     }
     reply(true, None)
 }
