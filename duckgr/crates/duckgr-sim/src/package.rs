@@ -37,6 +37,8 @@ pub struct Substrate {
     pub plantable_is_false: bool,
     pub marks: Vec<Id>,
     pub passage: Passage,
+    /// passage for the flight's class (only `Blocked` matters)
+    pub flight_passage: Passage,
 }
 
 #[derive(Debug)]
@@ -73,6 +75,8 @@ pub struct Cover {
     pub harvest: Option<Harvest>,
     pub marks: Vec<Id>,
     pub passage: Passage,
+    /// passage for the flight's class (only `Blocked` matters)
+    pub flight_passage: Passage,
 }
 
 #[derive(Debug)]
@@ -155,6 +159,18 @@ pub struct PlayerDef {
     pub mine_times: i64,
     /// ticks of each action, by the action's name
     pub durations: Vec<(String, i64)>,
+    /// The player can fly: a straight jump (also diagonal) of exactly
+    /// `cells` cells, taking the time of one step on clean ground.
+    pub flight: Option<Flight>,
+}
+
+/// Flight (package key `jogador.voo`). Takeoff and landing only on cells
+/// that cost exactly one step to walk on; every cell in between must not
+/// be blocked for the flight's passage class (`voo.passagem`). Cells with
+/// an element always block.
+#[derive(Debug)]
+pub struct Flight {
+    pub cells: i64,
 }
 
 #[derive(Debug)]
@@ -515,12 +531,22 @@ pub fn compile(package: &Value) -> Result<(Package, Value), String> {
         reach: b.int(pv.get("alcance"), "jogador.alcance").unwrap_or(0),
         mine_times: b.int(pv.get("minerarVezes"), "jogador.minerarVezes").filter(|v| *v != 0).unwrap_or(1),
         durations: entries(pv.get("duracoes")).map(|(a, t)| (a.clone(), t.as_i64().unwrap_or(1))).collect(),
+        flight: pv.get("voo").filter(|v| truthy(Some(v))).and_then(|f| {
+            let cells = b.int(f.get("celulas"), "jogador.voo.celulas")?;
+            if cells < 2 {
+                b.errors.push("jogador.voo.celulas must be at least 2".into());
+                return None;
+            }
+            Some(Flight { cells })
+        }),
     };
+    let flight_class = str_of(pv.get("voo").and_then(|f| f.get("passagem")));
 
     let mut substrates = Vec::new();
     for (id, s) in entries(c.get("substratos")) {
         let marks = b.marks_of(s.get("marcas"));
         let passage = b.passage(s, &class, &format!("substrate {id}"));
+        let flight_passage = b.passage(s, &flight_class, &format!("substrate {id}"));
         substrates.push(Substrate {
             id: id.clone(),
             name: str_of(s.get("nome")),
@@ -529,6 +555,7 @@ pub fn compile(package: &Value) -> Result<(Package, Value), String> {
             plantable_is_false: s.get("plantar") == Some(&Value::Bool(false)),
             marks,
             passage,
+            flight_passage,
         });
     }
     let mut deposits = Vec::new();
@@ -564,6 +591,7 @@ pub fn compile(package: &Value) -> Result<(Package, Value), String> {
         });
         let marks = b.marks_of(cv.get("marcas"));
         let passage = b.passage(cv, &class, &place);
+        let flight_passage = b.passage(cv, &flight_class, &place);
         covers.push(Cover {
             id: id.clone(),
             name: str_of(cv.get("nome")),
@@ -574,6 +602,7 @@ pub fn compile(package: &Value) -> Result<(Package, Value), String> {
             harvest,
             marks,
             passage,
+            flight_passage,
         });
     }
     let mut items = Vec::new();
