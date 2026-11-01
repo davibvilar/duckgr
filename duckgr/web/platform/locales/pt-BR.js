@@ -272,7 +272,7 @@ export default {
   "howTo.button": "Começar",
   "howTo.produce": "produzir",
   "howTo.body": `<ol>
-    <li>Você é o <b>pato</b>. Ele só mexe no que está ao lado dele; para o resto, anda até lá.</li>
+    <li>Você é o <b>pato</b>. Ele só mexe no que está ao lado dele; para o resto, anda até lá. Em chão limpo ele também voa de 3 em 3 células, até por cima da água, na velocidade de um passo.</li>
     <li>Passe o mouse numa célula para ver o que dá para fazer, com uma tecla para cada ação: <b>C</b> corta árvore, <b>M</b> minera, <b>R</b> recolhe, <b>A</b> abastece. Clicar faz a ação destacada. No celular, toque na célula.</li>
     <li>Com <b>Shift</b> a ação entra na fila: o pato faz uma depois da outra.</li>
     <li>Construa uma <b>mineradora</b> (tecla 1) em cima do ferro e uma <b>fornalha</b> (tecla 2) encostada nela: o minério passa sozinho para a fornalha.</li>

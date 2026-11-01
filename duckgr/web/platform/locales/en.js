@@ -272,7 +272,7 @@ export default {
   "howTo.button": "Start",
   "howTo.produce": "produce",
   "howTo.body": `<ol>
-    <li>You are the <b>duck</b>. It only touches what is next to it; for the rest, it walks there.</li>
+    <li>You are the <b>duck</b>. It only touches what is next to it; for the rest, it walks there. On clean ground it also flies 3 cells at a time, even over water, as fast as one step.</li>
     <li>Hover over a cell to see what can be done, with a key for each action: <b>C</b> cuts a tree, <b>M</b> mines, <b>R</b> collects, <b>F</b> refuels. Clicking does the highlighted action. On a phone, tap the cell.</li>
     <li>With <b>Shift</b> the action goes into the queue: the duck does one after the other.</li>
     <li>Build a <b>mining drill</b> (key 1) on top of iron and a <b>furnace</b> (key 2) right next to it: the ore moves to the furnace by itself.</li>

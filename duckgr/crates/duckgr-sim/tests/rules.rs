@@ -292,9 +292,14 @@ fn log_entries_without_messages_get_them_back_from_the_text() {
 
 /// A save written by the JavaScript core (v0.4), with a 13-minute game:
 /// machines, pollution that makes trees sick, research and a completed mission.
+/// The duck did not fly back then (package 0.3.0): the save is no longer
+/// opened by the game, but replaying it without the flight still checks that
+/// everything else in the core is unchanged.
 #[test]
 fn a_save_written_by_the_javascript_core_opens_with_the_same_hash() {
-    let p = terra_viva();
+    let mut v = data("terra-viva.json");
+    v["jogador"].as_object_mut().unwrap().remove("voo");
+    let p = compile(&v).expect("the package compiles").0;
     let v = data("save-v0.4.json");
     let save = &v["save"];
     let history = save["historico"].as_array().unwrap();

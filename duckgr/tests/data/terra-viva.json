@@ -1,7 +1,7 @@
 {
  "id": "terra-viva",
  "nome": "Terra Viva",
- "versao": "0.3.0",
+ "versao": "0.4.0",
  "descricao": "Primeira era: carvão e vapor. Produza sem devastar a floresta.",
  "mapa": {
   "chunk": 8,
@@ -115,6 +115,10 @@
   "nome": "Pato",
   "passagem": "pedestre",
   "celulasPorSegundo": 4,
+  "voo": {
+   "celulas": 3,
+   "passagem": "voo"
+  },
   "alcance": 1,
   "minerarVezes": 5,
   "duracoes": {
@@ -232,7 +236,8 @@
     "floresta"
    ],
    "passagem": {
-    "pedestre": 2
+    "pedestre": 2,
+    "voo": "bloqueia"
    },
    "absorve": {
     "poluicao": 25
@@ -255,7 +260,8 @@
     "floresta"
    ],
    "passagem": {
-    "pedestre": 2
+    "pedestre": 2,
+    "voo": "bloqueia"
    },
    "absorve": {
     "poluicao": 50

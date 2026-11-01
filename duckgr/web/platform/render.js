@@ -131,16 +131,22 @@ function element(ctx, C, e, px, py, cs, t) {
   if (s) { ctx.fillStyle = "#f2c14e"; ctx.fillRect(px + 2, py + cs - 4, Math.min(cs - 4, (cs - 4) * s / 20), 2); }
 }
 
-// The player's position on screen, with the fraction of the step under way (for animation).
+// A move longer than one cell is a flight (it takes the time of one step).
+const isFlight = (x, y, nx, ny) => Math.max(Math.abs(nx - x), Math.abs(ny - y)) > 1;
+
+// The player's position on screen, with the fraction of the step under way
+// (for animation). During a flight, `lift` (0 to 1) says how high the duck is.
 export function playerPosition(S, C) {
   const P = S.jog, next = P.cam[0];
-  if (next === undefined || !P.passo) return { x: P.x, y: P.y, dx: 0 };
-  const nx = next % S.L, ny = Math.floor(next / S.L);
-  const f = Math.min(1, P.passo / (C.jogador.ticksPorCelula * Math.max(1, passageCost(S, C, nx, ny))));
-  return { x: P.x + (nx - P.x) * f, y: P.y + (ny - P.y) * f, dx: nx - P.x };
+  if (next === undefined || !P.passo) return { x: P.x, y: P.y, dx: 0, lift: 0 };
+  const nx = next % S.L, ny = Math.floor(next / S.L), flying = isFlight(P.x, P.y, nx, ny);
+  const cost = flying ? 1 : Math.max(1, passageCost(S, C, nx, ny));
+  const f = Math.min(1, P.passo / (C.jogador.ticksPorCelula * cost));
+  return { x: P.x + (nx - P.x) * f, y: P.y + (ny - P.y) * f, dx: nx - P.x, lift: flying ? Math.sin(Math.PI * f) : 0 };
 }
 
 let facingLeft = false;
+const FLIGHT_HEIGHT = 0.7; // how high the duck flies, in cells
 function drawPlayer(ctx, S, C, op) {
   const cs = op.cs, P = S.jog, R = C.jogador.alcance;
   // reach
@@ -152,7 +158,16 @@ function drawPlayer(ctx, S, C, op) {
   if (P.cam.length) {
     ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 2; ctx.setLineDash([2, 5]);
     ctx.beginPath(); ctx.moveTo((p.x + 0.5) * cs, (p.y + 0.5) * cs);
-    for (const i of P.cam) ctx.lineTo((i % S.L + 0.5) * cs, (Math.floor(i / S.L) + 0.5) * cs);
+    // steps are straight lines; flights are arcs, from cell to cell
+    let fx = P.x, fy = P.y, first = true;
+    for (const i of P.cam) {
+      const nx = i % S.L, ny = Math.floor(i / S.L), tx = (nx + 0.5) * cs, ty = (ny + 0.5) * cs;
+      if (isFlight(fx, fy, nx, ny)) {
+        const ox = first ? p.x : fx, oy = first ? p.y : fy;
+        ctx.quadraticCurveTo(((ox + nx) / 2 + 0.5) * cs, ((oy + ny) / 2 + 0.5) * cs - FLIGHT_HEIGHT * cs * 2, tx, ty);
+      } else ctx.lineTo(tx, ty);
+      fx = nx; fy = ny; first = false;
+    }
     ctx.stroke(); ctx.setLineDash([]);
   }
   // queued tasks: a numbered badge on each target
@@ -174,14 +189,27 @@ function drawPlayer(ctx, S, C, op) {
   }
   // the duck
   if (p.dx) facingLeft = p.dx < 0;
-  const px = (p.x + 0.5) * cs, py = (p.y + 0.5) * cs, s = cs * 0.42, d = facingLeft ? -1 : 1;
-  const bob = P.cam.length ? Math.sin(op.t / 90) * cs * 0.04 : 0;
-  ctx.fillStyle = "rgba(0,0,0,.28)"; ctx.beginPath(); ctx.ellipse(px, py + s * 0.85, s * 0.8, s * 0.25, 0, 0, 7); ctx.fill();
+  const px = (p.x + 0.5) * cs, gy = (p.y + 0.5) * cs, s = cs * 0.42, d = facingLeft ? -1 : 1;
+  // in flight, the duck goes up and the shadow stays on the ground, smaller
+  const py = gy - p.lift * FLIGHT_HEIGHT * cs;
+  const bob = P.cam.length && !p.lift ? Math.sin(op.t / 90) * cs * 0.04 : 0;
+  const shadow = 1 - p.lift * 0.45;
+  ctx.fillStyle = `rgba(0,0,0,${0.28 * shadow})`; ctx.beginPath(); ctx.ellipse(px, gy + s * 0.85, s * 0.8 * shadow, s * 0.25 * shadow, 0, 0, 7); ctx.fill();
+  // in flight, the wings open and flap: one behind the body, one in front
+  const flap = Math.sin(op.t / 40);
+  const wing = color => {
+    ctx.save(); ctx.translate(px - d * s * 0.15, py + s * 0.1); ctx.rotate(-d * (0.9 + flap * 0.6));
+    ctx.fillStyle = color; ctx.strokeStyle = "#7a5a10"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.ellipse(-d * s * 0.6, 0, s * 0.7, s * 0.24, 0, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.restore();
+  };
+  if (p.lift) wing("#d9ad22");
   ctx.fillStyle = "#f6d34a"; ctx.strokeStyle = "#7a5a10"; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.ellipse(px - d * s * 0.1, py + s * 0.25 + bob, s * 0.75, s * 0.52, 0, 0, 7); ctx.fill(); ctx.stroke();
   ctx.beginPath(); ctx.arc(px + d * s * 0.38, py - s * 0.35 + bob, s * 0.42, 0, 7); ctx.fill(); ctx.stroke();
   ctx.fillStyle = "#f08a24"; ctx.beginPath();
   ctx.moveTo(px + d * s * 0.7, py - s * 0.38 + bob); ctx.lineTo(px + d * s * 1.15, py - s * 0.24 + bob); ctx.lineTo(px + d * s * 0.7, py - s * 0.14 + bob); ctx.fill();
   ctx.fillStyle = "#13202e"; ctx.beginPath(); ctx.arc(px + d * s * 0.48, py - s * 0.45 + bob, Math.max(1.2, s * 0.08), 0, 7); ctx.fill();
-  ctx.fillStyle = "#e9bf2f"; ctx.beginPath(); ctx.ellipse(px - d * s * 0.25, py + s * 0.2 + bob, s * 0.35, s * 0.2, d * -0.4, 0, 7); ctx.fill();
+  if (p.lift) wing("#f2c94a");
+  else { ctx.fillStyle = "#e9bf2f"; ctx.beginPath(); ctx.ellipse(px - d * s * 0.25, py + s * 0.2 + bob, s * 0.35, s * 0.2, d * -0.4, 0, 7); ctx.fill(); }
 }

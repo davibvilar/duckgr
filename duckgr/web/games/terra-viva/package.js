@@ -12,7 +12,7 @@
 export default {
   id: "terra-viva",
   nome: "Terra Viva",
-  versao: "0.3.0",
+  versao: "0.4.0",
   descricao: "Primeira era: carvão e vapor. Produza sem devastar a floresta.",
 
   mapa: {
@@ -41,11 +41,15 @@ export default {
   // values used when the player changes nothing (the default game)
   padrao: { semente: 2026, largura: 40, altura: 24, floresta: 1, recursosIniciais: 1 },
 
-  // The player walks for now. Vehicles, in the future, change the speed.
+  // The player walks and flies. Vehicles, in the future, change the speed.
   jogador: {
     nome: "Pato",
     passagem: "pedestre",       // passage class used by the layers
     celulasPorSegundo: 4,       // on foot
+    // The duck flies: a straight jump of 3 cells (also diagonal) in the time
+    // of one step. Takeoff and landing on clean ground; it flies over water,
+    // but not over trees ("voo" passage) nor over machines.
+    voo: { celulas: 3, passagem: "voo" },
     alcance: 1,                 // acts on the 8 cells around
     minerarVezes: 5,            // how many times "minerar" repeats per order
     duracoes: { colher: 1, minerar: 0.5, plantar: 0.4, construir: 0.5, desmontar: 0.5, recolher: 0.2, abastecer: 0.2, fornecer: 0.2 },
@@ -72,12 +76,12 @@ export default {
       aparencia: { forma: "broto", cor: "#8fd16a" },
     },
     jovem: {
-      nome: "Árvore jovem", marcas: ["floresta"], passagem: { pedestre: 2 }, absorve: { poluicao: 25 }, regride: "muda",
+      nome: "Árvore jovem", marcas: ["floresta"], passagem: { pedestre: 2, voo: "bloqueia" }, absorve: { poluicao: 25 }, regride: "muda",
       cresce: { para: "adulta", segundos: 60, bonusVizinho: "agua" },
       aparencia: { forma: "arvore", tamanho: 0.3, cor: "#4c9a3e" },
     },
     adulta: {
-      nome: "Árvore adulta", marcas: ["floresta"], passagem: { pedestre: 2 }, absorve: { poluicao: 50 }, regride: "jovem",
+      nome: "Árvore adulta", marcas: ["floresta"], passagem: { pedestre: 2, voo: "bloqueia" }, absorve: { poluicao: 50 }, regride: "jovem",
       colheita: { verbo: "Cortar", da: { madeira: 4, muda: 1 }, vira: "toco" },
       aparencia: { forma: "arvore", tamanho: 0.46, cor: "#2f6e2f" },
     },

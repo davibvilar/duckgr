@@ -34,6 +34,55 @@ pub fn passage_cost(s: &State, p: &Package, x: i64, y: i64) -> i64 {
     cost
 }
 
+/// The eight directions of a flight, in a fixed order (deterministic).
+const FLIGHT_DIRECTIONS: [(i64, i64); 8] = [(1, 0), (0, 1), (-1, 0), (0, -1), (1, 1), (-1, 1), (-1, -1), (1, -1)];
+
+/// Can the player fly over (x, y)? No element there, and neither the
+/// substrate nor the cover blocks the flight's passage class.
+fn flyable(s: &State, p: &Package, x: i64, y: i64) -> bool {
+    if !s.inside(x, y) {
+        return false;
+    }
+    let i = s.idx(x, y);
+    s.occ[i] == 0
+        && p.substrates[s.sub[i] as usize].flight_passage != Passage::Blocked
+        && s.cov[i].is_none_or(|c| p.covers[c as usize].flight_passage != Passage::Blocked)
+}
+
+/// Can the player take off from or land on (x, y)? Clean ground: walking
+/// there costs exactly one step, and nothing there blocks the flight.
+fn landable(s: &State, p: &Package, x: i64, y: i64) -> bool {
+    passage_cost(s, p, x, y) == 1 && flyable(s, p, x, y)
+}
+
+/// Can the player fly from (x, y) in the direction (dx, dy)? Returns the
+/// landing cell.
+fn flight(s: &State, p: &Package, x: i64, y: i64, dx: i64, dy: i64) -> Option<(i64, i64)> {
+    let n = p.player.flight.as_ref()?.cells;
+    let (lx, ly) = (x + dx * n, y + dy * n);
+    let ok = landable(s, p, x, y) && (1..n).all(|k| flyable(s, p, x + dx * k, y + dy * k)) && landable(s, p, lx, ly);
+    ok.then_some((lx, ly))
+}
+
+/// Is going from (x, y) to (tx, ty) a flight (and not a step)?
+pub fn is_flight(p: &Package, x: i64, y: i64, tx: i64, ty: i64) -> bool {
+    p.player.flight.is_some() && (tx - x).abs().max((ty - y).abs()) > 1
+}
+
+/// What one move along a path costs (in multiples of a step), from
+/// (x, y) to the cell (tx, ty): a step to a neighbor, or a flight, which
+/// costs one step; -1 if the move is not possible (anymore).
+pub fn move_cost(s: &State, p: &Package, x: i64, y: i64, tx: i64, ty: i64) -> i64 {
+    if !is_flight(p, x, y, tx, ty) {
+        return passage_cost(s, p, tx, ty);
+    }
+    let (dx, dy) = ((tx - x).signum(), (ty - y).signum());
+    match flight(s, p, x, y, dx, dy) {
+        Some(landing) if landing == (tx, ty) => 1,
+        _ => -1,
+    }
+}
+
 /// Starting position: the walkable cell closest to the map's center.
 pub fn start_position(s: &State, p: &Package) -> (i64, i64) {
     let (cx, cy) = (s.w / 2, s.h / 2);
@@ -62,7 +111,8 @@ pub fn in_reach(p: &Package, x: i64, y: i64, o: &Order) -> bool {
 }
 
 /// Cheapest path (Dijkstra with buckets; neighbors in a fixed order =
-/// deterministic) to any cell from where the order is within reach.
+/// deterministic) to any cell from where the order is within reach. If the
+/// player can fly, the path mixes steps and flights, whatever is faster.
 /// Returns the cell indices to walk (without the current cell): empty if
 /// already there, `None` if there is no path.
 pub fn path(s: &State, p: &Package, px: i64, py: i64, o: &Order) -> Option<Vec<i64>> {
@@ -97,12 +147,17 @@ pub fn path(s: &State, p: &Package, px: i64, py: i64, o: &Order) -> Option<Vec<i
                 route.reverse();
                 return Some(route);
             }
-            for (dx, dy) in NEIGHBORS {
-                let c = passage_cost(s, p, x + dx, y + dy);
+            let steps = NEIGHBORS.iter().map(|&(dx, dy)| (x + dx, y + dy, passage_cost(s, p, x + dx, y + dy)));
+            let flights = FLIGHT_DIRECTIONS
+                .iter()
+                .filter(|_| p.player.flight.is_some())
+                .filter_map(|&(dx, dy)| flight(s, p, x, y, dx, dy))
+                .map(|(lx, ly)| (lx, ly, 1));
+            for (nx, ny, c) in steps.chain(flights) {
                 if c < 0 {
                     continue;
                 }
-                let j = s.idx(x + dx, y + dy);
+                let j = s.idx(nx, ny);
                 let nd = d as i64 + c;
                 if nd < dist[j] {
                     dist[j] = nd;
@@ -516,7 +571,8 @@ pub fn player_step(s: &mut State, p: &Package) {
     if !in_reach(p, s.player.x, s.player.y, &o) {
         s.player.task = 0;
         let mut next = s.player.path.first().copied();
-        let cost_of = |s: &State, c: i64| passage_cost(s, p, c % s.w, c / s.w);
+        let (x, y) = (s.player.x, s.player.y);
+        let cost_of = |s: &State, c: i64| move_cost(s, p, x, y, c % s.w, c / s.w);
         let mut cost = next.map_or(-1, |c| cost_of(s, c));
         if cost < 0 {
             // no path yet, or the path got blocked: compute it again
