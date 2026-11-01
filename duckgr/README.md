@@ -10,11 +10,11 @@ O mascote é um pato que vai na frente mostrando o caminho.
 
 Versão jogável: **Terra Viva** (nome provisório), a primeira era do mundo industrial e ecológico inspirado no Factorio, só para um jogador. Você é um pato que anda pelo mapa: corte árvores, minere, monte mineradoras e fornalhas, e cumpra a missão sem deixar a floresta cair.
 
-Controles: passe o mouse numa célula para ver as ações possíveis, cada uma com uma tecla (C corta, M minera, R recolhe, A abastece, F fornece, P planta, D desmonta, I vai até lá, 1–9 constrói). Clicar faz a ação destacada; com Shift, a ação entra na fila. E abre o inventário, Esc para as tarefas, Espaço pausa.
+Controles: passe o mouse numa célula para ver as ações possíveis, cada uma com uma tecla (C corta, M minera, R recolhe, A abastece, F fornece, P planta, D desmonta, I vai até lá, 1–9 constrói). Cada clique põe a ação destacada no fim da fila de tarefas do pato, que vai fazendo uma depois da outra; com Shift, ele larga a fila e faz aquela agora. A fila aparece acima do mapa, com o progresso de cada tarefa e um × para tirar qualquer uma. O campo "Minerar N vezes" aceita qualquer número (até 9999): o pato fica na jazida até completar ou a jazida acabar, e segue para a próxima tarefa. E abre o inventário, Esc para as tarefas, Espaço pausa.
 
 Idioma: o jogo abre no idioma do navegador (português ou inglês) e dá para trocar em Configurações. Os atalhos de teclado acima são os do português; em inglês as letras mudam (a tela de atalhos mostra todas).
 
-Câmera: arraste para mover o mapa e use a roda do mouse (ou + e −) para o zoom; no celular, arraste com um dedo e faça pinça com dois. O botão ◎ (tecla H) volta a seguir o pato, e ⛶ (tecla T) põe o jogo em tela cheia. No celular, tocar numa célula abre uma folha com as ações em botões grandes, e "+ fila" faz o papel do Shift. A cada merge na `main`, o jogo é publicado no GitHub Pages.
+Câmera: arraste para mover o mapa e use a roda do mouse (ou + e −) para o zoom; no celular, arraste com um dedo e faça pinça com dois. O botão ◎ (tecla H) volta a seguir o pato, e ⛶ (tecla T) põe o jogo em tela cheia. No celular, tocar numa célula abre uma folha com as ações em botões grandes, e cada ação tocada vai para o fim da fila; o botão "Agora" faz o papel do Shift. A cada merge na `main`, o jogo é publicado no GitHub Pages.
 
 Sem internet: depois da primeira visita, o jogo fica guardado no aparelho (service worker em `web/sw.js`) e abre offline, com novo jogo, salvar e carregar. Ele também pode ser instalado como aplicativo (PWA), no computador ou pelo "Adicionar à tela inicial" do celular. Tudo é servido junto com o jogo, inclusive as fontes (`web/fonts/`).
 
